@@ -1,0 +1,92 @@
+{
+  "name": "vscode-ssh-config-all-in-one",
+  "displayName": "SSH Config All In One",
+  "description": "SSH config editing enhanced, providing autocompletion, validation, include path intellisense and formatting",
+  "version": "0.0.1",
+  "publisher": "hnrobert",
+  "icon": "images/icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hnrobert/vscode-ssh-config-all-in-one"
+  },
+  "engines": {
+    "vscode": "^1.83.0"
+  },
+  "extensionKind": [
+    "ui"
+  ],
+  "categories": [
+    "Formatters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "remote development",
+    "remote",
+    "vscode ssh"
+  ],
+  "main": "./out/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "ssh_config",
+        "aliases": [
+          "SSH Config"
+        ],
+        "extensions": [
+          "ssh_config"
+        ],
+        "filenames": [
+          "config",
+          "sshd_config"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "configuration": {
+      "title": "SSH Config All In One",
+      "properties": {
+        "vscode-ssh-config-all-in-one.format.indentSize": {
+          "type": "integer",
+          "default": 2,
+          "markdownDescription": "The number of spaces used for indentation"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "ssh.openUserConfig",
+        "title": "SSH: Open User Configuration"
+      }
+    ],
+    "grammars": [
+      {
+        "scopeName": "source.config.ssh.injection",
+        "path": "./syntaxes/ssh_config.tmLanguage.json",
+        "injectTo": [
+          "source.config.ssh"
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "publish": "vsce package --no-dependencies",
+    "vscode:prepublish": "pnpm run build",
+    "build": "tsup",
+    "watch": "tsup --watch",
+    "lint": "eslint src"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^2.8.0",
+    "@types/node": "~20.11.25",
+    "@types/vscode": "^1.83.0",
+    "eslint": "^8.57.0",
+    "tsup": "^8.5.0",
+    "typescript": "5.2.2"
+  }
+}
