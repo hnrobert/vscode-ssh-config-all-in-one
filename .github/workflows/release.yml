@@ -116,14 +116,17 @@ jobs:
           TAG=v${SEMVER}
 
           # Configure git author
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
           # Skip if tag already exists
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists - skipping pnpm version"
           else
-            pnpm version "$SEMVER"
+            pnpm version "$SEMVER" --no-git-tag-version
+            git add package.json pnpm-lock.yaml
+            git commit -m "chore(release): $TAG"
+            git tag "$TAG"
             git push origin HEAD
             git push origin --tags
           fi
