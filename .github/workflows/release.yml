@@ -131,12 +131,6 @@ jobs:
             git push origin --tags
           fi
 
-      - name: Prune devDependencies (keep production deps)
-        run: |
-          rm -rf node_modules
-          pnpm install --prod --frozen-lockfile --shamefully-hoist
-          echo "Production dependencies present:" && ls -1 node_modules | head -n 50 || true
-
       - name: Package the extension
         run: |
           if [[ ${{ steps.prerelease.outputs.prerelease }} == 'true' ]]; then
