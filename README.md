@@ -11,7 +11,7 @@
 - **Syntax Highlighting**: Enhanced and refined syntax grammar.
 - **Hover Support**: Hover over any keyword to see a brief description of its function.
 - **Go To Definition**: Supports clicking through `Include` statements.
-- **Customizable Formatting**: Automatically indent directives under `Host` and `Match` blocks. Controlled via the `vscode-ssh-config-all-in-one.format.indentSize` setting.
+- **Customizable Formatting**: Automatically indent directives under `Host` and `Match` blocks. Controlled via the `sshConfigAllInOne.format.indentSize` setting.
 
 ## Formatting Example
 
@@ -37,7 +37,7 @@ Host example
 
 ## Settings
 
-- `vscode-ssh-config-all-in-one.format.indentSize`: The number of spaces used for indentation when formatting `Host` and `Match` blocks. (Default: `2`)
+- `sshConfigAllInOne.format.indentSize`: The number of spaces used for indentation when formatting `Host` and `Match` blocks. (Default: `2`)
 
 ## Acknowledgements
 

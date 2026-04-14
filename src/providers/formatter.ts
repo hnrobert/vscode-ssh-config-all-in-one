@@ -33,7 +33,7 @@ export class SSHFormatProvider implements DocumentFormattingEditProvider {
   ): ProviderResult<TextEdit[]> {
     const editor = window.activeTextEditor;
     const indentSize = workspace
-      .getConfiguration('vscode-ssh-config-all-in-one.format')
+      .getConfiguration('sshConfigAllInOne.format')
       .get('indentSize', 2);
 
     if (!editor) {

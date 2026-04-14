@@ -51,7 +51,7 @@
     "configuration": {
       "title": "SSH Config All In One",
       "properties": {
-        "vscode-ssh-config-all-in-one.format.indentSize": {
+        "sshConfigAllInOne.format.indentSize": {
           "type": "integer",
           "default": 2,
           "markdownDescription": "The number of spaces used for indentation"
