@@ -123,7 +123,10 @@ jobs:
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists - skipping pnpm version"
           else
-            pnpm version "$SEMVER"
+            pnpm version "$SEMVER" --no-git-tag-version
+            git add package.json pnpm-lock.yaml
+            git commit -m "chore(release): $TAG"
+            git tag "$TAG"
             git push origin HEAD
             git push origin --tags
           fi
