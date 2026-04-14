@@ -4,8 +4,8 @@
   "description": "Enhanced SSH config editing, providing autocompletion, formatting, hover support, and Quick Connect actions to ms-vscode-remote.remote-ssh.",
   "version": "0.0.3",
   "publisher": "hnrobert",
-  "icon": "images/icon.png",
-  "license": "MIT",
+  "icon": "docs/images/icon.png",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/hnrobert/vscode-ssh-config-all-in-one"
@@ -51,7 +51,7 @@
     "configuration": {
       "title": "SSH Config All In One",
       "properties": {
-        "vscode-ssh-config-all-in-one.format.indentSize": {
+        "sshConfigAllInOne.format.indentSize": {
           "type": "integer",
           "default": 2,
           "markdownDescription": "The number of spaces used for indentation"
