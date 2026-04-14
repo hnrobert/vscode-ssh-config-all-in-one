@@ -5,7 +5,7 @@
   "version": "0.0.3",
   "publisher": "hnrobert",
   "icon": "docs/images/icon.png",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/hnrobert/vscode-ssh-config-all-in-one"
