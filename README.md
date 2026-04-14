@@ -1,10 +1,11 @@
 # SSH Config All-In-One
 
-> Enhanced SSH Config Language Server extension for Visual Studio Code. Provides autocompletion, syntax highlighting, formatting, go to include file definitions, hover support, and **quick connection actions** for SSH config directives.
+> Enhanced SSH Config Language Server extension for Visual Studio Code. Provides autocompletion, syntax highlighting, formatting, go to include file definitions, hover support, and quick connection actions for SSH config directives.
 
 ## Features
 
-- **Quick Connect CodeLens (New!)**: Provides "Connect in Current Window..." and "Connect in New Window..." inline buttons above each `Host` declaration. Seamlessly connects to the server using the official `ms-vscode-remote.remote-ssh` extension.
+- **Quick Connect CodeLens**: Provides "Connect in Current Window..." and "Connect in New Window..." inline buttons above each `Host` declaration. Seamlessly connects to the server using the official `ms-vscode-remote.remote-ssh` extension.
+  - ![demo of quick connect code lens](docs/images/demo-codelens-quick-connection.png)
 - **Universal Formatter**: Formats your SSH config regardless of where it's opened (local, remote workspace, or even unsaved untitled files).
 - **Autocompletion**: Provides rich suggestions as you type in an SSH config file.
 - **Syntax Highlighting**: Enhanced and refined syntax grammar.

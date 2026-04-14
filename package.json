@@ -4,7 +4,7 @@
   "description": "Enhanced SSH config editing, providing autocompletion, formatting, hover support, and Quick Connect actions to ms-vscode-remote.remote-ssh.",
   "version": "0.0.3",
   "publisher": "hnrobert",
-  "icon": "images/icon.png",
+  "icon": "docs/images/icon.png",
   "license": "MIT",
   "repository": {
     "type": "git",
