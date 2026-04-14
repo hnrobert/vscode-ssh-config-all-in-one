@@ -1,6 +1,12 @@
-import { type Disposable, type ExtensionContext, commands } from 'vscode'
-import { SSHCompletionItemsProvider, SSHDocumentLinkProvider, SSHFormatProvider, SSHHoverProvider } from './providers'
-import { openUserConfig } from './functions'
+import { type Disposable, type ExtensionContext, Uri, commands } from 'vscode';
+import {
+  SSHCodeLensProvider,
+  SSHCompletionItemsProvider,
+  SSHDocumentLinkProvider,
+  SSHFormatProvider,
+  SSHHoverProvider,
+} from './providers';
+import { openUserConfig } from './functions';
 
 /**
  * Activates the extension.
@@ -8,17 +14,59 @@ import { openUserConfig } from './functions'
  * @param context - The extension context.
  */
 export function activate(context: ExtensionContext) {
-  const subscriptions = context.subscriptions
-  const disposable: Disposable[] = []
+  const subscriptions = context.subscriptions;
+  const disposable: Disposable[] = [];
 
-  disposable.push(commands.registerCommand('ssh.openUserConfig', () => openUserConfig()))
+  disposable.push(
+    commands.registerCommand(
+      'vscode-ssh-config-all-in-one.openUserConfig',
+      () => openUserConfig(),
+    ),
+  );
 
-  new SSHCompletionItemsProvider(disposable)
-  new SSHHoverProvider(disposable)
-  new SSHDocumentLinkProvider(disposable)
-  new SSHFormatProvider(disposable)
+  disposable.push(
+    commands.registerCommand(
+      'vscode-ssh-config-all-in-one.connectCurrentWindow',
+      (hostStr: string) => {
+        commands
+          .executeCommand('opensshremotes.openEmptyWindowInCurrentWindow', {
+            host: hostStr,
+          })
+          .then(undefined, () => {
+            // Fallback if the remote extension changes its API
+            commands.executeCommand('vscode.newWindow', {
+              remoteAuthority: `ssh-remote+${hostStr}`,
+              reuseWindow: true,
+            });
+          });
+      },
+    ),
+  );
 
-  subscriptions.push(...disposable)
+  disposable.push(
+    commands.registerCommand(
+      'vscode-ssh-config-all-in-one.connectNewWindow',
+      (hostStr: string) => {
+        commands
+          .executeCommand('opensshremotes.openEmptyWindow', { host: hostStr })
+          .then(undefined, () => {
+            // Fallback
+            commands.executeCommand('vscode.newWindow', {
+              remoteAuthority: `ssh-remote+${hostStr}`,
+              reuseWindow: false,
+            });
+          });
+      },
+    ),
+  );
+
+  new SSHCompletionItemsProvider(disposable);
+  new SSHHoverProvider(disposable);
+  new SSHDocumentLinkProvider(disposable);
+  new SSHFormatProvider(disposable);
+  new SSHCodeLensProvider(disposable);
+
+  subscriptions.push(...disposable);
 }
 
 export function deactivate() {

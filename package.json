@@ -60,7 +60,7 @@
     },
     "commands": [
       {
-        "command": "ssh.openUserConfig",
+        "command": "vscode-ssh-config-all-in-one.openUserConfig",
         "title": "SSH: Open User Configuration"
       }
     ],
