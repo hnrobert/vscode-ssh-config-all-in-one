@@ -129,6 +129,30 @@ jobs:
             git tag "$TAG"
             git push origin HEAD
             git push origin --tags
+
+            # Sync develop branch if we are releasing from main
+            if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+              echo "🔄 Syncing develop branch with main release commit..."
+              MAIN_HEAD=$(git rev-parse HEAD)
+              git fetch origin develop || true
+              
+              if git show-ref --verify --quiet refs/remotes/origin/develop; then
+                git checkout develop
+                if git merge --ff-only $MAIN_HEAD; then
+                  git push origin develop
+                  echo "✅ develop branch successfully synced with main release commit"
+                else
+                  echo "⚠️ Fast-forward merge failed, there might be conflicts or diverged commits"
+                fi
+                git checkout - # switch back to original branch
+              else
+                echo "🔧 Creating develop branch from main..."
+                git checkout -b develop
+                git push origin develop
+                echo "✅ develop branch created and pushed"
+                git checkout - # switch back to original branch
+              fi
+            fi
           fi
 
       - name: Package the extension
