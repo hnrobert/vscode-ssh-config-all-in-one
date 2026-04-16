@@ -3,9 +3,9 @@ import type {
   CodeLensProvider,
   Disposable,
   TextDocument,
-} from 'vscode';
-import { CodeLens, Range, commands, languages } from 'vscode';
-import { DOCUMENT_PROVIDER } from './utils';
+} from 'vscode'
+import { CodeLens, commands, languages, Range } from 'vscode'
+import { DOCUMENT_PROVIDER } from './utils'
 
 /**
  * Provides CodeLens for SSH configuration documents.
@@ -18,7 +18,7 @@ export class SSHCodeLensProvider implements CodeLensProvider {
   constructor(disposables: Disposable[]) {
     disposables.push(
       languages.registerCodeLensProvider(DOCUMENT_PROVIDER, this),
-    );
+    )
   }
 
   /**
@@ -31,13 +31,13 @@ export class SSHCodeLensProvider implements CodeLensProvider {
     document: TextDocument,
     token: CancellationToken,
   ): CodeLens[] {
-    const codeLenses: CodeLens[] = [];
-    const text = document.getText();
-    const lines = text.split('\n');
+    const codeLenses: CodeLens[] = []
+    const text = document.getText()
+    const lines = text.split('\n')
 
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmedLine = line.trim();
+      const line = lines[i]
+      const trimmedLine = line.trim()
 
       // Only process Host lines, ignore wildcards or regex lines if desired (though user can still try to connect)
       if (
@@ -45,14 +45,14 @@ export class SSHCodeLensProvider implements CodeLensProvider {
         !trimmedLine.startsWith('Host *')
       ) {
         // Extract the host names, there could be multiple separated by space
-        const hostNames = trimmedLine.substring(5).trim().split(/\s+/);
+        const hostNames = trimmedLine.substring(5).trim().split(/\s+/)
 
         for (const hostName of hostNames) {
           if (!hostName || hostName.includes('*') || hostName.includes('?')) {
-            continue; // Skip wildcards
+            continue // Skip wildcards
           }
 
-          const range = new Range(i, 0, i, line.length);
+          const range = new Range(i, 0, i, line.length)
 
           codeLenses.push(
             new CodeLens(range, {
@@ -61,7 +61,7 @@ export class SSHCodeLensProvider implements CodeLensProvider {
               command: 'vscode-ssh-config-all-in-one.connectCurrentWindow',
               arguments: [hostName],
             }),
-          );
+          )
 
           codeLenses.push(
             new CodeLens(range, {
@@ -70,7 +70,7 @@ export class SSHCodeLensProvider implements CodeLensProvider {
               command: 'vscode-ssh-config-all-in-one.connectNewWindow',
               arguments: [hostName],
             }),
-          );
+          )
 
           // If there are multiple hosts on one line, maybe just show connection links for the first exact host, or all?
           // Showing for all might clutter, let's just do it for all exact matches.
@@ -78,6 +78,6 @@ export class SSHCodeLensProvider implements CodeLensProvider {
       }
     }
 
-    return codeLenses;
+    return codeLenses
   }
 }
