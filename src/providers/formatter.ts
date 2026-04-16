@@ -4,9 +4,9 @@ import type {
   FormattingOptions,
   ProviderResult,
   TextDocument,
-} from 'vscode';
-import { Range, TextEdit, languages, window, workspace } from 'vscode';
-import { DOCUMENT_PROVIDER } from './utils';
+} from 'vscode'
+import { languages, Range, TextEdit, window, workspace } from 'vscode'
+import { DOCUMENT_PROVIDER } from './utils'
 
 /**
  * Provides formatting for SSH configuration documents.
@@ -19,7 +19,7 @@ export class SSHFormatProvider implements DocumentFormattingEditProvider {
   constructor(disposables: Disposable[]) {
     disposables.push(
       languages.registerDocumentFormattingEditProvider(DOCUMENT_PROVIDER, this),
-    );
+    )
   }
 
   /**
@@ -31,28 +31,28 @@ export class SSHFormatProvider implements DocumentFormattingEditProvider {
     document: TextDocument,
     options: FormattingOptions,
   ): ProviderResult<TextEdit[]> {
-    const editor = window.activeTextEditor;
+    const editor = window.activeTextEditor
     const indentSize = workspace
       .getConfiguration('sshConfigAllInOne.format')
-      .get('indentSize', 2);
+      .get('indentSize', 2)
 
     if (!editor) {
-      return;
+      return
     }
 
-    const text = document.getText();
-    const formattedText = this.formatSshConfig(text, indentSize);
+    const text = document.getText()
+    const formattedText = this.formatSshConfig(text, indentSize)
 
     if (text === formattedText) {
-      return [];
+      return []
     }
 
     const fullRange = new Range(
       document.positionAt(0),
       document.positionAt(text.length),
-    );
+    )
 
-    return [TextEdit.replace(fullRange, formattedText)];
+    return [TextEdit.replace(fullRange, formattedText)]
   }
 
   /**
@@ -62,9 +62,9 @@ export class SSHFormatProvider implements DocumentFormattingEditProvider {
    * @returns The formatted SSH configuration text.
    */
   private formatSshConfig(text: string, indentSize: number): string {
-    const customIndentation = ' '.repeat(indentSize);
-    let isHostBlock = false;
-    let isFirstLine = true;
+    const customIndentation = ' '.repeat(indentSize)
+    let isHostBlock = false
+    let isFirstLine = true
     return text
       .split('\n')
       .map((line, index, lines) => {
@@ -72,26 +72,26 @@ export class SSHFormatProvider implements DocumentFormattingEditProvider {
           line.trim().startsWith('Host ') ||
           line.trim().startsWith('Match ')
         ) {
-          isHostBlock = true;
+          isHostBlock = true
           if (
             !isFirstLine &&
             lines[index - 1].trim() !== '' &&
             !lines[index - 1].trim().startsWith('#')
           ) {
-            return `\n${line.trim()}`;
+            return `\n${line.trim()}`
           }
-          return line.trim();
+          return line.trim()
         } else if (line.trim() === '') {
-          isHostBlock = false;
-          isFirstLine = false;
-          return line;
+          isHostBlock = false
+          isFirstLine = false
+          return line
         } else {
-          isFirstLine = false;
+          isFirstLine = false
           return isHostBlock
             ? `${customIndentation}${line.trim()}`
-            : line.trim();
+            : line.trim()
         }
       })
-      .join('\n');
+      .join('\n')
   }
 }

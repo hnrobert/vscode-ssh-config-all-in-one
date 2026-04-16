@@ -7,9 +7,9 @@ import type {
 import {
   DocumentLink,
   FileType,
+  languages,
   Range,
   Uri,
-  languages,
   workspace,
 } from 'vscode'
 import { DOCUMENT_PROVIDER } from './utils'

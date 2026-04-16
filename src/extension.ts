@@ -1,12 +1,13 @@
-import { type Disposable, type ExtensionContext, Uri, commands } from 'vscode';
+import type { Disposable, ExtensionContext } from 'vscode'
+import { commands, Uri } from 'vscode'
+import { openUserConfig } from './functions'
 import {
   SSHCodeLensProvider,
   SSHCompletionItemsProvider,
   SSHDocumentLinkProvider,
   SSHFormatProvider,
   SSHHoverProvider,
-} from './providers';
-import { openUserConfig } from './functions';
+} from './providers'
 
 /**
  * Activates the extension.
@@ -14,15 +15,15 @@ import { openUserConfig } from './functions';
  * @param context - The extension context.
  */
 export function activate(context: ExtensionContext) {
-  const subscriptions = context.subscriptions;
-  const disposable: Disposable[] = [];
+  const subscriptions = context.subscriptions
+  const disposable: Disposable[] = []
 
   disposable.push(
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.openUserConfig',
       () => openUserConfig(),
     ),
-  );
+  )
 
   disposable.push(
     commands.registerCommand(
@@ -37,11 +38,11 @@ export function activate(context: ExtensionContext) {
             commands.executeCommand('vscode.newWindow', {
               remoteAuthority: `ssh-remote+${hostStr}`,
               reuseWindow: true,
-            });
-          });
+            })
+          })
       },
     ),
-  );
+  )
 
   disposable.push(
     commands.registerCommand(
@@ -54,19 +55,19 @@ export function activate(context: ExtensionContext) {
             commands.executeCommand('vscode.newWindow', {
               remoteAuthority: `ssh-remote+${hostStr}`,
               reuseWindow: false,
-            });
-          });
+            })
+          })
       },
     ),
-  );
+  )
 
-  new SSHCompletionItemsProvider(disposable);
-  new SSHHoverProvider(disposable);
-  new SSHDocumentLinkProvider(disposable);
-  new SSHFormatProvider(disposable);
-  new SSHCodeLensProvider(disposable);
+  new SSHCompletionItemsProvider(disposable)
+  new SSHHoverProvider(disposable)
+  new SSHDocumentLinkProvider(disposable)
+  new SSHFormatProvider(disposable)
+  new SSHCodeLensProvider(disposable)
 
-  subscriptions.push(...disposable);
+  subscriptions.push(...disposable)
 }
 
 export function deactivate() {

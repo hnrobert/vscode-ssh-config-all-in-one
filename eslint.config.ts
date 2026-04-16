@@ -1,6 +1,6 @@
-const antfu = require('@antfu/eslint-config').default
+import antfu from '@antfu/eslint-config'
 
-module.exports = antfu(
+export default antfu(
   {
     stylistic: true,
     typescript: true,
@@ -8,7 +8,7 @@ module.exports = antfu(
     yaml: false,
     markdown: false,
     ignores: [
-      '**/eslint.config.js',
+      '**/eslint.config.ts',
       '**/prism.js',
       '**/build',
       '**/logs',
@@ -18,17 +18,14 @@ module.exports = antfu(
       'src/test/**',
     ],
     overrides: {
-
       stylistic: {
-        'space-infix-ops': 'error',
-        'comma-spacing': ['error', { after: true, before: false }],
-        'ts/indent': ['error', 2],
-        'object-curly-spacing': 'off',
-        'ts/object-curly-spacing': ['error', 'always'],
+        'style/space-infix-ops': 'error',
+        'style/comma-spacing': ['error', { after: true, before: false }],
+        'style/indent': ['error', 2],
+        'style/object-curly-spacing': ['error', 'always'],
       },
       typescript: {
         'ts/no-use-before-define': 'off',
-        'ts/interface-name-prefix': 'off',
         'ts/no-explicit-any': 'off',
         'ts/no-parameter-properties': 'off',
         'ts/no-unused-vars': 'off',
@@ -45,19 +42,7 @@ module.exports = antfu(
             prefer: 'type-imports',
           },
         ],
-        'prefer-const': 'off',
-        'unused-imports/no-unused-imports': 'off',
-        'unused-imports/no-unused-vars': 'off',
-        'import/no-absolute-path': 'off',
-        'import/no-named-as-default': 'off',
-        'import/no-named-as-default-member': 'off',
-        'import/no-self-import': 'error',
-        'import/first': 'error',
-        'import/namespace': 'off',
-        'import/newline-after-import': ['error', { count: 1, considerComments: true }],
-
       },
-
     },
   },
   {
@@ -76,6 +61,9 @@ module.exports = antfu(
       'unicorn/no-instanceof-array': 'off',
       'unicorn/number-literal-case': 'off',
       'unicorn/prefer-includes': 'off',
-    }
+      'prefer-const': 'off',
+      'import/first': 'error',
+      'import/newline-after-import': ['error', { count: 1, considerComments: true }],
+    },
   },
 )

@@ -7,8 +7,8 @@ import type {
 import {
   CompletionItem,
   CompletionItemKind,
-  SnippetString,
   languages,
+  SnippetString,
 } from 'vscode'
 import { DOCUMENT_PROVIDER } from './utils'
 
