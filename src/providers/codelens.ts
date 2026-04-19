@@ -72,6 +72,15 @@ export class SSHCodeLensProvider implements CodeLensProvider {
             }),
           )
 
+          codeLenses.push(
+            new CodeLens(range, {
+              title: `Copy Public Key...`,
+              tooltip: `Copy SSH public key to ${hostName}`,
+              command: 'vscode-ssh-config-all-in-one.copyPublicKey',
+              arguments: [hostName],
+            }),
+          )
+
           // If there are multiple hosts on one line, maybe just show connection links for the first exact host, or all?
           // Showing for all might clutter, let's just do it for all exact matches.
         }
