@@ -119,6 +119,32 @@ async function promptGenerateKeys(): Promise<boolean> {
 }
 
 /**
+ * Detects the operating system of a remote host.
+ * @param hostName - The name of the host to detect.
+ * @returns A promise that resolves to 'unix' or 'windows', or null if detection fails.
+ */
+async function detectRemoteOS(hostName: string): Promise<'unix' | 'windows' | null> {
+  try {
+    // Try to detect Windows by checking for PowerShell
+    const { stdout: psCheck } = await execAsync(`ssh -o ConnectTimeout=5 -o BatchMode=yes ${hostName} "powershell -Command \\"echo test\\"" 2>/dev/null || echo ""`, { timeout: 10000 })
+    if (psCheck.trim() === 'test') {
+      return 'windows'
+    }
+
+    // Try Unix/Linux detection
+    const { stdout: unixCheck } = await execAsync(`ssh -o ConnectTimeout=5 -o BatchMode=yes ${hostName} "uname" 2>/dev/null || echo ""`, { timeout: 10000 })
+    if (unixCheck.trim()) {
+      return 'unix'
+    }
+
+    return null
+  }
+  catch {
+    return null
+  }
+}
+
+/**
  * Copies the SSH public key to a remote host.
  * @param hostName - The name of the host to copy the key to.
  */
@@ -131,24 +157,34 @@ export async function copyPublicKey(hostName: string) {
       return
     }
 
-    const remoteOS = await window.showQuickPick(
-      [
-        { label: 'Unix/Linux/Mac', value: 'unix' },
-        { label: 'Windows', value: 'windows' },
-      ],
-      {
-        placeHolder: 'Select the remote host operating system',
-        title: 'Remote Host OS',
-      },
-    )
+    window.showInformationMessage(`Detecting remote system type for ${hostName}...`)
+
+    let remoteOS = await detectRemoteOS(hostName)
 
     if (!remoteOS) {
-      return
+      const choice = await window.showQuickPick(
+        [
+          { label: 'Unix/Linux/Mac', value: 'unix' as const },
+          { label: 'Windows', value: 'windows' as const },
+        ],
+        {
+          placeHolder: 'Could not auto-detect. Please select the remote host operating system',
+          title: 'Remote Host OS',
+        },
+      )
+
+      if (!choice) {
+        return
+      }
+      remoteOS = choice.value
+    }
+    else {
+      window.showInformationMessage(`Detected remote system: ${remoteOS === 'unix' ? 'Unix/Linux/Mac' : 'Windows'}`)
     }
 
     const isLocalWindows = platform() === 'win32'
 
-    if (remoteOS.value === 'windows') {
+    if (remoteOS === 'windows') {
       await copyPublicKeyToWindowsRemote(hostName, publicKeyPath, isLocalWindows)
     }
     else {
