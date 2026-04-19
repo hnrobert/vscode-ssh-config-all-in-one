@@ -74,8 +74,8 @@ export class SSHCodeLensProvider implements CodeLensProvider {
 
           codeLenses.push(
             new CodeLens(range, {
-              title: `Copy Public Key...`,
-              tooltip: `Copy SSH public key to ${hostName}`,
+              title: `Send Public Key...`,
+              tooltip: `Send SSH public key to ${hostName}`,
               command: 'vscode-ssh-config-all-in-one.copyPublicKey',
               arguments: [hostName],
             }),
