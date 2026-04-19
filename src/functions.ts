@@ -131,53 +131,80 @@ export async function copyPublicKey(hostName: string) {
       return
     }
 
-    const isWindows = platform() === 'win32'
+    const remoteOS = await window.showQuickPick(
+      [
+        { label: 'Unix/Linux/Mac', value: 'unix' },
+        { label: 'Windows', value: 'windows' },
+      ],
+      {
+        placeHolder: 'Select the remote host operating system',
+        title: 'Remote Host OS',
+      },
+    )
 
-    if (isWindows) {
-      await copyPublicKeyWindows(hostName, publicKeyPath)
-    } else {
-      await copyPublicKeyUnix(hostName, publicKeyPath)
+    if (!remoteOS) {
+      return
     }
-  } catch (error) {
+
+    const isLocalWindows = platform() === 'win32'
+
+    if (remoteOS.value === 'windows') {
+      await copyPublicKeyToWindowsRemote(hostName, publicKeyPath, isLocalWindows)
+    }
+    else {
+      await copyPublicKeyToUnixRemote(hostName, publicKeyPath, isLocalWindows)
+    }
+  }
+  catch (error) {
     window.showErrorMessage(`Failed to copy public key: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
 /**
- * Copies the SSH public key to a remote host on Unix systems.
+ * Copies the SSH public key to a Unix/Linux/Mac remote host.
  * @param hostName - The name of the host to copy the key to.
  * @param publicKeyPath - The path to the public key file.
+ * @param isLocalWindows - Whether the local machine is Windows.
  */
-async function copyPublicKeyUnix(hostName: string, publicKeyPath: string) {
-  try {
-    await execAsync('which ssh-copy-id')
-
-    const terminal = window.createTerminal('SSH Copy ID')
-    terminal.show()
-    terminal.sendText(`ssh-copy-id -i "${publicKeyPath}" ${hostName}`)
-
-    window.showInformationMessage(`Copying public key to ${hostName}. Please enter your password in the terminal.`)
-  } catch {
-    const terminal = window.createTerminal('SSH Copy ID')
-    terminal.show()
-    terminal.sendText(`cat "${publicKeyPath}" | ssh ${hostName} "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh"`)
-
-    window.showInformationMessage(`Copying public key to ${hostName}. Please enter your password in the terminal.`)
-  }
-}
-
-/**
- * Copies the SSH public key to a remote host on Windows systems.
- * @param hostName - The name of the host to copy the key to.
- * @param publicKeyPath - The path to the public key file.
- */
-async function copyPublicKeyWindows(hostName: string, publicKeyPath: string) {
+async function copyPublicKeyToUnixRemote(hostName: string, publicKeyPath: string, isLocalWindows: boolean) {
   const terminal = window.createTerminal('SSH Copy ID')
   terminal.show()
 
-  const script = `$pubKey = Get-Content "${publicKeyPath}" -Raw; ssh ${hostName} "mkdir -p ~/.ssh && echo '$pubKey' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh"`
+  if (isLocalWindows) {
+    const script = `type "${publicKeyPath}" | ssh ${hostName} "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh"`
+    terminal.sendText(script)
+  }
+  else {
+    try {
+      await execAsync('which ssh-copy-id')
+      terminal.sendText(`ssh-copy-id -i "${publicKeyPath}" ${hostName}`)
+    }
+    catch {
+      terminal.sendText(`cat "${publicKeyPath}" | ssh ${hostName} "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh"`)
+    }
+  }
 
-  terminal.sendText(script)
+  window.showInformationMessage(`Copying public key to ${hostName}. Please enter your password in the terminal.`)
+}
+
+/**
+ * Copies the SSH public key to a Windows remote host.
+ * @param hostName - The name of the host to copy the key to.
+ * @param publicKeyPath - The path to the public key file.
+ * @param isLocalWindows - Whether the local machine is Windows.
+ */
+async function copyPublicKeyToWindowsRemote(hostName: string, publicKeyPath: string, isLocalWindows: boolean) {
+  const terminal = window.createTerminal('SSH Copy ID')
+  terminal.show()
+
+  if (isLocalWindows) {
+    const script = `type "${publicKeyPath}" | ssh ${hostName} "powershell -Command \\"New-Item -ItemType Directory -Force -Path $env:USERPROFILE\\.ssh | Out-Null; $input | Add-Content -Path $env:USERPROFILE\\.ssh\\authorized_keys\\""`
+    terminal.sendText(script)
+  }
+  else {
+    const script = `cat "${publicKeyPath}" | ssh ${hostName} "powershell -Command \\"New-Item -ItemType Directory -Force -Path \\$env:USERPROFILE\\.ssh | Out-Null; \\$input | Add-Content -Path \\$env:USERPROFILE\\.ssh\\authorized_keys\\""`
+    terminal.sendText(script)
+  }
 
   window.showInformationMessage(`Copying public key to ${hostName}. Please enter your password in the terminal.`)
 }
