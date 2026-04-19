@@ -1,6 +1,6 @@
 import type { Disposable, ExtensionContext } from 'vscode'
 import { commands, Uri } from 'vscode'
-import { openUserConfig } from './functions'
+import { copyPublicKey, openUserConfig } from './functions'
 import {
   SSHCodeLensProvider,
   SSHCompletionItemsProvider,
@@ -57,6 +57,15 @@ export function activate(context: ExtensionContext) {
               reuseWindow: false,
             })
           })
+      },
+    ),
+  )
+
+  disposable.push(
+    commands.registerCommand(
+      'vscode-ssh-config-all-in-one.copyPublicKey',
+      (hostStr: string) => {
+        copyPublicKey(hostStr)
       },
     ),
   )
