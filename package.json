@@ -58,12 +58,90 @@
         }
       }
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ssh-explorer",
+          "title": "SSH Explorer",
+          "icon": "docs/images/icon-stroke.svg"
+        }
+      ]
+    },
+    "views": {
+      "ssh-explorer": [
+        {
+          "id": "ssh-explorer-hosts",
+          "name": "Hosts",
+          "icon": "docs/images/icon-stroke.svg"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "vscode-ssh-config-all-in-one.openUserConfig",
         "title": "SSH: Open User Configuration"
+      },
+      {
+        "command": "ssh-explorer.refresh",
+        "title": "SSH Explorer: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "ssh-explorer.connectCurrentWindow",
+        "title": "Connect in Current Window",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "ssh-explorer.connectNewWindow",
+        "title": "Connect in New Window",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "ssh-explorer.connectFolderCurrentWindow",
+        "title": "Connect Folder in Current Window",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "ssh-explorer.connectFolderNewWindow",
+        "title": "Connect Folder in New Window",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "ssh-explorer.revealHost",
+        "title": "SSH Explorer: Reveal Host"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "ssh-explorer.refresh",
+          "when": "view == ssh-explorer-hosts",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "ssh-explorer.connectCurrentWindow",
+          "when": "view == ssh-explorer-hosts && viewItem == host",
+          "group": "inline"
+        },
+        {
+          "command": "ssh-explorer.connectNewWindow",
+          "when": "view == ssh-explorer-hosts && viewItem == host",
+          "group": "inline"
+        },
+        {
+          "command": "ssh-explorer.connectFolderCurrentWindow",
+          "when": "view == ssh-explorer-hosts && viewItem == folder",
+          "group": "inline"
+        },
+        {
+          "command": "ssh-explorer.connectFolderNewWindow",
+          "when": "view == ssh-explorer-hosts && viewItem == folder",
+          "group": "inline"
+        }
+      ]
+    },
     "grammars": [
       {
         "scopeName": "source.config.ssh.injection",

@@ -24,12 +24,12 @@ export class SSHCodeLensProvider implements CodeLensProvider {
   /**
    * Computes a list of lenses.
    * @param document - The document in which the command was invoked.
-   * @param token - A cancellation token.
+   * @param _token - A cancellation token.
    * @returns An array of CodeLenses or a thenable that resolves to such.
    */
   provideCodeLenses(
     document: TextDocument,
-    token: CancellationToken,
+    _token: CancellationToken,
   ): CodeLens[] {
     const codeLenses: CodeLens[] = []
     const text = document.getText()
@@ -46,17 +46,18 @@ export class SSHCodeLensProvider implements CodeLensProvider {
       ) {
         // Extract the host names, there could be multiple separated by space
         const hostNames = trimmedLine.substring(5).trim().split(/\s+/)
+        const blockEndLine = this.findBlockEnd(lines, i)
+        const blockEndRange = new Range(blockEndLine, 0, blockEndLine, lines[blockEndLine].length)
 
         for (const hostName of hostNames) {
-          if (!hostName || hostName.includes('*') || hostName.includes('?')) {
-            continue // Skip wildcards
-          }
+          if (!hostName || hostName.includes('*') || hostName.includes('?'))
+            continue
 
           const range = new Range(i, 0, i, line.length)
 
           codeLenses.push(
             new CodeLens(range, {
-              title: `Connect in Current Window...`,
+              title: 'Connect in Current Window...',
               tooltip: `Connect to ${hostName} in the current window`,
               command: 'vscode-ssh-config-all-in-one.connectCurrentWindow',
               arguments: [hostName],
@@ -65,7 +66,7 @@ export class SSHCodeLensProvider implements CodeLensProvider {
 
           codeLenses.push(
             new CodeLens(range, {
-              title: `Connect in New Window...`,
+              title: 'Connect in New Window...',
               tooltip: `Connect to ${hostName} in a new window`,
               command: 'vscode-ssh-config-all-in-one.connectNewWindow',
               arguments: [hostName],
@@ -74,19 +75,39 @@ export class SSHCodeLensProvider implements CodeLensProvider {
 
           codeLenses.push(
             new CodeLens(range, {
-              title: `Send Public Key...`,
+              title: 'Send Public Key...',
               tooltip: `Send SSH public key to ${hostName}`,
               command: 'vscode-ssh-config-all-in-one.copyPublicKey',
               arguments: [hostName],
             }),
           )
 
-          // If there are multiple hosts on one line, maybe just show connection links for the first exact host, or all?
-          // Showing for all might clutter, let's just do it for all exact matches.
+          codeLenses.push(
+            new CodeLens(blockEndRange, {
+              title: 'Show in Explorer',
+              tooltip: `Show ${hostName} in SSH Explorer`,
+              command: 'ssh-explorer.revealHost',
+              arguments: [hostName],
+            }),
+          )
         }
       }
     }
 
     return codeLenses
+  }
+
+  private findBlockEnd(lines: string[], hostLineIndex: number): number {
+    for (let i = hostLineIndex + 1; i < lines.length; i++) {
+      const trimmed = lines[i].trim()
+      if (
+        trimmed === ''
+        || trimmed.startsWith('Host ')
+        || trimmed.startsWith('Match ')
+      ) {
+        return i - 1
+      }
+    }
+    return lines.length - 1
   }
 }

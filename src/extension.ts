@@ -1,10 +1,14 @@
 import type { Disposable, ExtensionContext } from 'vscode'
-import { commands, Uri } from 'vscode'
+import { commands, Uri, window } from 'vscode'
 import { copyPublicKey, openUserConfig } from './functions'
 import {
+  connectFolder,
+  connectHost,
+  RecentConnectionsManager,
   SSHCodeLensProvider,
   SSHCompletionItemsProvider,
   SSHDocumentLinkProvider,
+  SSHExplorerProvider,
   SSHFormatProvider,
   SSHHoverProvider,
 } from './providers'
@@ -17,6 +21,15 @@ import {
 export function activate(context: ExtensionContext) {
   const subscriptions = context.subscriptions
   const disposable: Disposable[] = []
+
+  // Recent connections & tree view
+  const recentManager = new RecentConnectionsManager(context)
+  const explorerProvider = new SSHExplorerProvider(recentManager)
+  const treeView = window.createTreeView('ssh-explorer-hosts', {
+    treeDataProvider: explorerProvider,
+    showCollapseAll: true,
+  })
+  disposable.push(treeView)
 
   disposable.push(
     commands.registerCommand(
@@ -40,6 +53,7 @@ export function activate(context: ExtensionContext) {
               reuseWindow: true,
             })
           })
+        recentManager.add(hostStr)
       },
     ),
   )
@@ -57,6 +71,7 @@ export function activate(context: ExtensionContext) {
               reuseWindow: false,
             })
           })
+        recentManager.add(hostStr)
       },
     ),
   )
@@ -66,6 +81,66 @@ export function activate(context: ExtensionContext) {
       'vscode-ssh-config-all-in-one.copyPublicKey',
       (hostStr: string) => {
         copyPublicKey(hostStr)
+      },
+    ),
+  )
+
+  // SSH Explorer commands
+  disposable.push(
+    commands.registerCommand('ssh-explorer.refresh', () => {
+      explorerProvider.refresh()
+    }),
+  )
+
+  disposable.push(
+    commands.registerCommand(
+      'ssh-explorer.connectCurrentWindow',
+      (item: { hostName: string }) => {
+        connectHost(item.hostName, recentManager, explorerProvider, true)
+      },
+    ),
+  )
+
+  disposable.push(
+    commands.registerCommand(
+      'ssh-explorer.connectNewWindow',
+      (item: { hostName: string }) => {
+        connectHost(item.hostName, recentManager, explorerProvider, false)
+      },
+    ),
+  )
+
+  disposable.push(
+    commands.registerCommand(
+      'ssh-explorer.connectFolderCurrentWindow',
+      (item: { hostName: string, description: string }) => {
+        connectFolder(item.hostName, item.description, recentManager, explorerProvider, true)
+      },
+    ),
+  )
+
+  disposable.push(
+    commands.registerCommand(
+      'ssh-explorer.connectFolderNewWindow',
+      (item: { hostName: string, description: string }) => {
+        connectFolder(item.hostName, item.description, recentManager, explorerProvider, false)
+      },
+    ),
+  )
+
+  disposable.push(
+    commands.registerCommand(
+      'ssh-explorer.revealHost',
+      async (hostName: string) => {
+        await explorerProvider.getHosts()
+        const item = explorerProvider.findHostItem(hostName)
+        if (item) {
+          await treeView.reveal(item, {
+            expand: true,
+            focus: true,
+            select: true,
+          })
+        }
       },
     ),
   )
