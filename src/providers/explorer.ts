@@ -3,7 +3,7 @@ import { readFile } from 'node:fs'
 import { homedir, platform } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { commands, env, EventEmitter, ThemeColor, ThemeIcon, TreeItem, TreeItemCollapsibleState, window } from 'vscode'
+import { commands, env, EventEmitter, ThemeColor, ThemeIcon, TreeItem, TreeItemCollapsibleState, window, workspace } from 'vscode'
 
 const readFileAsync = promisify(readFile)
 
@@ -16,16 +16,23 @@ function getCurrentSSHHost(): string | undefined {
   return undefined
 }
 
+function getCurrentSSHFolder(): string | undefined {
+  // Get current workspace folder path if in SSH session
+  if (!env.remoteName?.startsWith('ssh-remote+'))
+    return undefined
+
+  const workspaceFolder = workspace.workspaceFolders?.[0]
+  if (!workspaceFolder)
+    return undefined
+
+  // The URI path for remote workspaces
+  return workspaceFolder.uri.path
+}
+
 interface RecentWorkspace {
   folderUri?: string
   workspace?: { configPath: string }
   label?: string
-}
-
-interface StorageData {
-  recentlyOpenedPathsList?: {
-    entries: RecentWorkspace[]
-  }
 }
 
 async function getVSCodeStoragePath(): Promise<string> {
@@ -43,43 +50,81 @@ async function getVSCodeStoragePath(): Promise<string> {
     basePath = join(homedir(), '.config', appName)
   }
 
-  return join(basePath, 'User', 'globalStorage', 'storage.json')
+  return join(basePath, 'User', 'globalStorage', 'state.vscdb')
 }
 
 async function getRecentSSHConnections(): Promise<Map<string, string[]>> {
   const hostFolders = new Map<string, string[]>()
 
   try {
-    const storagePath = await getVSCodeStoragePath()
-    const content = await readFileAsync(storagePath, 'utf8')
-    const data: StorageData = JSON.parse(content)
+    const dbPath = await getVSCodeStoragePath()
 
-    const entries = data.recentlyOpenedPathsList?.entries || []
+    // Try to use sqlite3 command to read the database
+    const { exec } = await import('node:child_process')
+    const { promisify } = await import('node:util')
+    const execAsync = promisify(exec)
 
-    for (const entry of entries) {
-      const uri = entry.folderUri || entry.workspace?.configPath
-      if (!uri)
-        continue
+    try {
+      const { stdout } = await execAsync(
+        `sqlite3 "${dbPath}" "SELECT value FROM ItemTable WHERE key='history.recentlyOpenedPathsList'"`,
+      )
 
-      // Parse vscode-remote://ssh-remote+hostname/path/to/folder
-      const match = /^vscode-remote:\/\/ssh-remote\+([^/]+)(\/.*)$/.exec(uri)
-      if (match) {
-        const hostname = match[1]
-        const folderPath = match[2] || '/'
+      if (stdout.trim()) {
+        const data = JSON.parse(stdout.trim())
+        const entries: RecentWorkspace[] = data.entries || []
 
-        if (!hostFolders.has(hostname)) {
-          hostFolders.set(hostname, [])
+        console.log(`[SSH Explorer] Found ${entries.length} total entries`)
+
+        for (const entry of entries) {
+          const uri = entry.folderUri || entry.workspace?.configPath
+          if (!uri)
+            continue
+
+          // Parse vscode-remote://ssh-remote+<encoded-host>/path/to/folder
+          // or vscode-remote://ssh-remote%2B<hex-encoded-json>/path/to/folder
+          const match = /^vscode-remote:\/\/ssh-remote[+%]2[Bb]([^/]+)(\/.*)$/.exec(uri)
+          if (match) {
+            let hostname = match[1]
+            const folderPath = match[2] || '/'
+
+            // The hostname is hex-encoded JSON
+            try {
+              const { Buffer } = await import('node:buffer')
+              const decoded = Buffer.from(hostname, 'hex').toString('utf-8')
+              const hostData = JSON.parse(decoded)
+              hostname = hostData.hostName || hostname
+            }
+            catch (err) {
+              // If decoding fails, try URL decoding
+              hostname = decodeURIComponent(hostname)
+            }
+
+            if (!hostFolders.has(hostname)) {
+              hostFolders.set(hostname, [])
+            }
+
+            const folders = hostFolders.get(hostname)!
+            if (!folders.includes(folderPath)) {
+              folders.push(folderPath)
+            }
+          }
         }
 
-        const folders = hostFolders.get(hostname)!
-        if (!folders.includes(folderPath)) {
-          folders.push(folderPath)
+        console.log(`[SSH Explorer] Parsed ${hostFolders.size} SSH hosts with folders:`)
+        for (const [host, folders] of hostFolders.entries()) {
+          console.log(`  ${host}: ${folders.length} folders`)
         }
       }
+      else {
+        console.log('[SSH Explorer] No data returned from SQLite query')
+      }
+    }
+    catch (sqliteError) {
+      console.error('[SSH Explorer] Failed to read SQLite database:', sqliteError)
     }
   }
   catch (error) {
-    console.error('Failed to read VS Code storage:', error)
+    console.error('[SSH Explorer] Failed to get recent SSH connections:', error)
   }
 
   return hostFolders
@@ -99,7 +144,8 @@ export class SSHHostItem extends TreeItem {
 
     // Use 'vm' icon (same as VS Code Remote SSH)
     if (isConnected) {
-      this.iconPath = new ThemeIcon('vm-active') || new ThemeIcon('vm', new ThemeColor('terminal.ansiGreen'))
+      // Use green color for connected host
+      this.iconPath = new ThemeIcon('vm', new ThemeColor('terminal.ansiGreen'))
       this.tooltip = `SSH Host: ${hostName} (Connected)`
     }
     else {
@@ -115,11 +161,20 @@ export class SSHFolderItem extends TreeItem {
   constructor(
     public readonly hostName: string,
     public readonly folder: string,
+    isConnected: boolean = false,
   ) {
     super(folder, TreeItemCollapsibleState.None)
-    this.contextValue = 'folder'
-    this.iconPath = new ThemeIcon('folder')
-    this.tooltip = `${hostName}:${folder}`
+    this.contextValue = isConnected ? 'folder-connected' : 'folder'
+
+    // Use green color for connected folder
+    if (isConnected) {
+      this.iconPath = new ThemeIcon('folder', new ThemeColor('terminal.ansiGreen'))
+      this.tooltip = `${hostName}:${folder} (Connected)`
+    }
+    else {
+      this.iconPath = new ThemeIcon('folder')
+      this.tooltip = `${hostName}:${folder}`
+    }
   }
 }
 
@@ -178,21 +233,32 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   private recentFolders: Map<string, string[]> = new Map()
 
   refresh(): void {
+    console.log('[SSH Explorer] Refresh triggered')
+    this.hostsCache = []
+    this.recentFolders.clear()
     this._onDidChangeTreeData.fire()
   }
 
   async getHosts(): Promise<SSHHostItem[]> {
+    console.log('[SSH Explorer] Getting hosts...')
     const entries = await parseSSHConfig()
     const currentHost = getCurrentSSHHost()
     this.recentFolders = await getRecentSSHConnections()
 
+    console.log(`[SSH Explorer] Current SSH host: ${currentHost}`)
+    console.log(`[SSH Explorer] Found ${entries.length} hosts in SSH config`)
+
     this.hostsCache = entries.map((e) => {
       const hasRecent = this.recentFolders.has(e.host) || this.recentFolders.has(e.hostname || '')
+      const isConnected = e.host === currentHost || e.hostname === currentHost
+
+      console.log(`[SSH Explorer] Host ${e.host} (${e.hostname}): hasRecent=${hasRecent}, isConnected=${isConnected}`)
+
       return new SSHHostItem(
         e.host,
         e.hostname,
         hasRecent,
-        e.host === currentHost || e.hostname === currentHost,
+        isConnected,
       )
     })
     return this.hostsCache
@@ -222,10 +288,23 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         || this.recentFolders.get(element.description || '')
         || []
 
+      console.log(`[SSH Explorer] Getting children for host ${element.hostName}: ${folders.length} folders`)
+
       if (folders.length === 0)
         return []
 
-      return folders.map(folder => new SSHFolderItem(element.hostName, folder))
+      // Check if we're currently connected to this host and which folder
+      const currentHost = getCurrentSSHHost()
+      const currentFolder = getCurrentSSHFolder()
+      const isThisHostConnected = element.hostName === currentHost || element.description === currentHost
+
+      console.log(`[SSH Explorer] Current folder: ${currentFolder}, isThisHostConnected: ${isThisHostConnected}`)
+
+      return folders.map((folder) => {
+        const isFolderConnected = isThisHostConnected && currentFolder === folder
+        console.log(`[SSH Explorer] Folder ${folder}: isConnected=${isFolderConnected}`)
+        return new SSHFolderItem(element.hostName, folder, isFolderConnected)
+      })
     }
 
     return []
