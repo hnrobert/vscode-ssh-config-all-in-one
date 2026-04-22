@@ -53,13 +53,31 @@ function getBaseName(path: string): string {
   return parts.length > 0 ? parts[parts.length - 1] : path
 }
 
-function getCurrentSSHHost(): string | undefined {
-  // env.remoteName returns something like "ssh-remote+hostname" when in SSH session
+async function getCurrentSSHHost(): Promise<string | undefined> {
+  // env.remoteName returns something like "ssh-remote+<hex-encoded-json>" when in SSH session
   const remoteName = env.remoteName
-  if (remoteName?.startsWith('ssh-remote+')) {
-    return remoteName.substring('ssh-remote+'.length)
+  if (!remoteName?.startsWith('ssh-remote+'))
+    return undefined
+
+  let hostname = remoteName.substring('ssh-remote+'.length)
+
+  // Decode URL-encoded hostname
+  hostname = decodeURIComponent(hostname)
+
+  // If it's hex-encoded JSON, decode it
+  if (/^[0-9a-f]+$/i.test(hostname)) {
+    try {
+      const { Buffer } = await import('node:buffer')
+      const decoded = Buffer.from(hostname, 'hex').toString('utf-8')
+      const hostData = JSON.parse(decoded)
+      hostname = hostData.hostName || hostname
+    }
+    catch {
+      // Not hex-encoded JSON, use as-is
+    }
   }
-  return undefined
+
+  return hostname
 }
 
 function getCurrentSSHFolder(): string | undefined {
@@ -294,7 +312,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   async getHosts(): Promise<SSHHostItem[]> {
     console.log('[SSH Explorer] Getting hosts...')
     const entries = await parseSSHConfig()
-    const currentHost = getCurrentSSHHost()
+    const currentHost = await getCurrentSSHHost()
     this.recentFolders = await getRecentSSHConnections()
 
     console.log(`[SSH Explorer] Current SSH host: ${currentHost}`)
@@ -346,15 +364,16 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         return []
 
       // Check if we're currently connected to this host and which folder
-      const currentHost = getCurrentSSHHost()
+      const currentHost = await getCurrentSSHHost()
       const currentFolder = getCurrentSSHFolder()
       const isThisHostConnected = element.hostName === currentHost || element.description === currentHost
 
-      console.log(`[SSH Explorer] Current folder: ${currentFolder}, isThisHostConnected: ${isThisHostConnected}`)
+      console.log(`[SSH Explorer] Current host: ${currentHost}, Current folder: ${currentFolder}`)
+      console.log(`[SSH Explorer] This host: ${element.hostName}, isThisHostConnected: ${isThisHostConnected}`)
 
       return folders.map((folder) => {
         const isFolderConnected = isThisHostConnected && currentFolder === folder
-        console.log(`[SSH Explorer] Folder ${folder}: isConnected=${isFolderConnected}`)
+        console.log(`[SSH Explorer] Folder ${folder}: isConnected=${isFolderConnected} (currentFolder=${currentFolder})`)
         return new SSHFolderItem(element.hostName, folder, isFolderConnected)
       })
     }
