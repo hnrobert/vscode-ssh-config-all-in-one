@@ -7,6 +7,52 @@ import { commands, env, EventEmitter, ThemeColor, ThemeIcon, TreeItem, TreeItemC
 
 const readFileAsync = promisify(readFile)
 
+function replaceHomeDirectory(path: string): string {
+  // Replace home directory with ~ for better readability
+  // Linux/macOS: /home/username/... or /Users/username/...
+  // Windows: /c:/Users/username/... or C:\Users\username\...
+
+  // Handle URL-encoded paths
+  const decodedPath = decodeURIComponent(path)
+
+  // Linux: /home/username/...
+  const linuxMatch = /^\/home\/[^/]+\/(.*)$/.exec(decodedPath)
+  if (linuxMatch) {
+    return `~/${linuxMatch[1]}`
+  }
+
+  // macOS: /Users/username/...
+  const macMatch = /^\/Users\/[^/]+\/(.*)$/.exec(decodedPath)
+  if (macMatch) {
+    return `~/${macMatch[1]}`
+  }
+
+  // Windows: /c:/Users/username/... or C:\Users\username\...
+  const winMatch = /^\/[a-z]:\/Users\/[^/]+\/(.*)$/i.exec(decodedPath)
+  if (winMatch) {
+    return `~/${winMatch[1]}`
+  }
+
+  // If just home directory
+  if (decodedPath === '/home' || decodedPath === '/Users' || /^\/[a-z]:\/Users$/i.test(decodedPath)) {
+    return '~'
+  }
+
+  // If path is just /home/username or /Users/username
+  if (/^\/home\/[^/]+$/.test(decodedPath) || /^\/Users\/[^/]+$/.test(decodedPath)) {
+    return '~'
+  }
+
+  return decodedPath
+}
+
+function getBaseName(path: string): string {
+  // Get the last part of the path as the folder name
+  const decodedPath = decodeURIComponent(path)
+  const parts = decodedPath.split('/').filter(p => p.length > 0)
+  return parts.length > 0 ? parts[parts.length - 1] : path
+}
+
 function getCurrentSSHHost(): string | undefined {
   // env.remoteName returns something like "ssh-remote+hostname" when in SSH session
   const remoteName = env.remoteName
@@ -163,18 +209,24 @@ export class SSHFolderItem extends TreeItem {
     public readonly folder: string,
     isConnected: boolean = false,
   ) {
-    super(folder, TreeItemCollapsibleState.None)
+    // Use folder name as label, full path as description
+    const folderName = getBaseName(folder)
+    const displayPath = replaceHomeDirectory(folder)
+
+    super(folderName, TreeItemCollapsibleState.None)
     this.contextValue = isConnected ? 'folder-connected' : 'folder'
 
     // Use green color for connected folder
     if (isConnected) {
       this.iconPath = new ThemeIcon('folder', new ThemeColor('terminal.ansiGreen'))
-      this.tooltip = `${hostName}:${folder} (Connected)`
+      this.tooltip = `${hostName}:${displayPath} (Connected)`
     }
     else {
       this.iconPath = new ThemeIcon('folder')
-      this.tooltip = `${hostName}:${folder}`
+      this.tooltip = `${hostName}:${displayPath}`
     }
+
+    this.description = displayPath
   }
 }
 
@@ -345,28 +397,26 @@ export async function connectFolder(
   provider: SSHExplorerProvider,
   reuseWindow: boolean,
 ): Promise<void> {
-  const command = reuseWindow
-    ? 'opensshremotes.openEmptyWindowInCurrentWindow'
-    : 'opensshremotes.openEmptyWindow'
-
   try {
+    // Construct the remote URI
+    const { Uri } = await import('vscode')
+    const folderUri = Uri.parse(`vscode-remote://ssh-remote+${encodeURIComponent(hostName)}${folder}`)
+
     await window.withProgress(
       {
         location: 15,
-        title: `Connecting to ${hostName}:${folder}...`,
+        title: `Opening ${hostName}:${folder}...`,
       },
-      () => commands.executeCommand(command, {
-        host: hostName,
-        folderPath: folder,
-      }),
+      async () => {
+        // Use vscode.openFolder to open the remote folder
+        await commands.executeCommand('vscode.openFolder', folderUri, {
+          forceNewWindow: !reuseWindow,
+        })
+      },
     )
   }
-  catch {
-    // Fallback: open remote window and let user navigate
-    await commands.executeCommand('vscode.newWindow', {
-      remoteAuthority: `ssh-remote+${hostName}`,
-      reuseWindow,
-    })
+  catch (error) {
+    window.showErrorMessage(`Failed to open folder: ${error instanceof Error ? error.message : String(error)}`)
   }
 
   provider.refresh()
