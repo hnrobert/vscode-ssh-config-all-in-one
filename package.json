@@ -26,6 +26,9 @@
     "vscode ssh"
   ],
   "main": "./out/extension.js",
+  "enabledApiProposals": [
+    "contribViewsRemote"
+  ],
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": true
@@ -58,21 +61,12 @@
         }
       }
     },
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "ssh-explorer",
-          "title": "SSH Explorer",
-          "icon": "docs/images/icon-stroke.svg"
-        }
-      ]
-    },
     "views": {
-      "ssh-explorer": [
+      "remote": [
         {
           "id": "ssh-explorer-hosts",
-          "name": "Hosts",
-          "icon": "docs/images/icon-stroke.svg"
+          "name": "SSH Config Hosts",
+          "group": "targets@2"
         }
       ]
     },

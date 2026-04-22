@@ -105,7 +105,9 @@ export class SSHCodeLensProvider implements CodeLensProvider {
         || trimmed.startsWith('Host ')
         || trimmed.startsWith('Match ')
       ) {
-        return i - 1
+        // Attach CodeLens to the terminating line (blank or next Host/Match)
+        // so it renders below the block content
+        return i
       }
     }
     return lines.length - 1

@@ -152,6 +152,12 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
     return element
   }
 
+  getParent(element: TreeItem): TreeItem | undefined {
+    if (element instanceof SSHFolderItem)
+      return this.hostsCache.find(h => h.hostName === element.hostName)
+    return undefined
+  }
+
   async getChildren(element?: TreeItem): Promise<TreeItem[]> {
     if (!element)
       return this.getHosts()

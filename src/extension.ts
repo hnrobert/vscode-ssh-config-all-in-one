@@ -132,14 +132,27 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'ssh-explorer.revealHost',
       async (hostName: string) => {
-        await explorerProvider.getHosts()
-        const item = explorerProvider.findHostItem(hostName)
-        if (item) {
-          await treeView.reveal(item, {
-            expand: true,
-            focus: true,
-            select: true,
-          })
+        try {
+          // Ensure the Remote Explorer view is visible
+          await commands.executeCommand('workbench.view.remote')
+
+          // Refresh and get hosts
+          await explorerProvider.getHosts()
+          const item = explorerProvider.findHostItem(hostName)
+
+          if (item) {
+            await treeView.reveal(item, {
+              expand: true,
+              focus: true,
+              select: true,
+            })
+          }
+          else {
+            window.showWarningMessage(`Host "${hostName}" not found in SSH config`)
+          }
+        }
+        catch (error) {
+          window.showErrorMessage(`Failed to reveal host: ${error instanceof Error ? error.message : String(error)}`)
         }
       },
     ),
