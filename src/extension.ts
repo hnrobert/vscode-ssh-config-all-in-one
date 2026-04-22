@@ -1,10 +1,9 @@
 import type { Disposable, ExtensionContext } from 'vscode'
-import { commands, Uri, window } from 'vscode'
+import { commands, window } from 'vscode'
 import { copyPublicKey, openUserConfig } from './functions'
 import {
   connectFolder,
   connectHost,
-  RecentConnectionsManager,
   SSHCodeLensProvider,
   SSHCompletionItemsProvider,
   SSHDocumentLinkProvider,
@@ -13,21 +12,15 @@ import {
   SSHHoverProvider,
 } from './providers'
 
-/**
- * Activates the extension.
- *
- * @param context - The extension context.
- */
 export function activate(context: ExtensionContext) {
   const subscriptions = context.subscriptions
   const disposable: Disposable[] = []
 
-  // Recent connections & tree view
-  const recentManager = new RecentConnectionsManager(context)
-  const explorerProvider = new SSHExplorerProvider(recentManager)
+  // Tree view
+  const explorerProvider = new SSHExplorerProvider()
   const treeView = window.createTreeView('ssh-explorer-hosts', {
     treeDataProvider: explorerProvider,
-    showCollapseAll: true,
+    showCollapseAll: false,
   })
   disposable.push(treeView)
 
@@ -47,13 +40,11 @@ export function activate(context: ExtensionContext) {
             host: hostStr,
           })
           .then(undefined, () => {
-            // Fallback if the remote extension changes its API
             commands.executeCommand('vscode.newWindow', {
               remoteAuthority: `ssh-remote+${hostStr}`,
               reuseWindow: true,
             })
           })
-        recentManager.add(hostStr)
       },
     ),
   )
@@ -65,13 +56,11 @@ export function activate(context: ExtensionContext) {
         commands
           .executeCommand('opensshremotes.openEmptyWindow', { host: hostStr })
           .then(undefined, () => {
-            // Fallback
             commands.executeCommand('vscode.newWindow', {
               remoteAuthority: `ssh-remote+${hostStr}`,
               reuseWindow: false,
             })
           })
-        recentManager.add(hostStr)
       },
     ),
   )
@@ -96,7 +85,7 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'ssh-explorer.connectCurrentWindow',
       (item: { hostName: string }) => {
-        connectHost(item.hostName, recentManager, explorerProvider, true)
+        connectHost(item.hostName, explorerProvider, true)
       },
     ),
   )
@@ -105,7 +94,7 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'ssh-explorer.connectNewWindow',
       (item: { hostName: string }) => {
-        connectHost(item.hostName, recentManager, explorerProvider, false)
+        connectHost(item.hostName, explorerProvider, false)
       },
     ),
   )
@@ -113,8 +102,8 @@ export function activate(context: ExtensionContext) {
   disposable.push(
     commands.registerCommand(
       'ssh-explorer.connectFolderCurrentWindow',
-      (item: { hostName: string, description: string }) => {
-        connectFolder(item.hostName, item.description, recentManager, explorerProvider, true)
+      (item: { hostName: string, folder: string }) => {
+        connectFolder(item.hostName, item.folder, explorerProvider, true)
       },
     ),
   )
@@ -122,8 +111,8 @@ export function activate(context: ExtensionContext) {
   disposable.push(
     commands.registerCommand(
       'ssh-explorer.connectFolderNewWindow',
-      (item: { hostName: string, description: string }) => {
-        connectFolder(item.hostName, item.description, recentManager, explorerProvider, false)
+      (item: { hostName: string, folder: string }) => {
+        connectFolder(item.hostName, item.folder, explorerProvider, false)
       },
     ),
   )

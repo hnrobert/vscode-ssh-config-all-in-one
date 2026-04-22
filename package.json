@@ -91,6 +91,11 @@
         "icon": "$(empty-window)"
       },
       {
+        "command": "ssh-explorer.connectNewWindow",
+        "title": "Connect in New Window",
+        "icon": "$(empty-window)"
+      },
+      {
         "command": "ssh-explorer.connectFolderCurrentWindow",
         "title": "Connect Folder in Current Window",
         "icon": "$(arrow-right)"
@@ -116,12 +121,12 @@
       "view/item/context": [
         {
           "command": "ssh-explorer.connectCurrentWindow",
-          "when": "view == ssh-explorer-hosts && viewItem == host",
+          "when": "view == ssh-explorer-hosts && viewItem =~ /host/",
           "group": "inline"
         },
         {
           "command": "ssh-explorer.connectNewWindow",
-          "when": "view == ssh-explorer-hosts && viewItem == host",
+          "when": "view == ssh-explorer-hosts && viewItem =~ /host/",
           "group": "inline"
         },
         {

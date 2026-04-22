@@ -1,47 +1,88 @@
 import type { ExtensionContext, TreeDataProvider } from 'vscode'
 import { readFile } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, platform } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { commands, EventEmitter, ThemeIcon, TreeItem, TreeItemCollapsibleState, window } from 'vscode'
+import { commands, env, EventEmitter, ThemeColor, ThemeIcon, TreeItem, TreeItemCollapsibleState, window } from 'vscode'
 
 const readFileAsync = promisify(readFile)
 
-interface RecentConnection {
-  host: string
-  folder: string
-  timestamp: number
+function getCurrentSSHHost(): string | undefined {
+  // env.remoteName returns something like "ssh-remote+hostname" when in SSH session
+  const remoteName = env.remoteName
+  if (remoteName?.startsWith('ssh-remote+')) {
+    return remoteName.substring('ssh-remote+'.length)
+  }
+  return undefined
 }
 
-export class RecentConnectionsManager {
-  private static readonly STORAGE_KEY = 'ssh-explorer.recent'
-  private static readonly MAX_ENTRIES = 20
+interface RecentWorkspace {
+  folderUri?: string
+  workspace?: { configPath: string }
+  label?: string
+}
 
-  constructor(private context: ExtensionContext) {}
+interface StorageData {
+  recentlyOpenedPathsList?: {
+    entries: RecentWorkspace[]
+  }
+}
 
-  async add(host: string, folder?: string): Promise<void> {
-    const entries = this.getAll()
-    const key = `${host}:${folder || '/'}`
-    const filtered = entries.filter(
-      e => `${e.host}:${e.folder}` !== key,
-    )
-    filtered.unshift({ host, folder: folder || '/', timestamp: Date.now() })
-    await this.context.globalState.update(
-      RecentConnectionsManager.STORAGE_KEY,
-      filtered.slice(0, RecentConnectionsManager.MAX_ENTRIES),
-    )
+async function getVSCodeStoragePath(): Promise<string> {
+  const plat = platform()
+  const appName = env.appName.includes('Insiders') ? 'Code - Insiders' : 'Code'
+
+  let basePath: string
+  if (plat === 'darwin') {
+    basePath = join(homedir(), 'Library', 'Application Support', appName)
+  }
+  else if (plat === 'win32') {
+    basePath = join(process.env.APPDATA || '', appName)
+  }
+  else {
+    basePath = join(homedir(), '.config', appName)
   }
 
-  getAll(): RecentConnection[] {
-    return this.context.globalState.get<RecentConnection[]>(
-      RecentConnectionsManager.STORAGE_KEY,
-      [],
-    )
+  return join(basePath, 'User', 'globalStorage', 'storage.json')
+}
+
+async function getRecentSSHConnections(): Promise<Map<string, string[]>> {
+  const hostFolders = new Map<string, string[]>()
+
+  try {
+    const storagePath = await getVSCodeStoragePath()
+    const content = await readFileAsync(storagePath, 'utf8')
+    const data: StorageData = JSON.parse(content)
+
+    const entries = data.recentlyOpenedPathsList?.entries || []
+
+    for (const entry of entries) {
+      const uri = entry.folderUri || entry.workspace?.configPath
+      if (!uri)
+        continue
+
+      // Parse vscode-remote://ssh-remote+hostname/path/to/folder
+      const match = /^vscode-remote:\/\/ssh-remote\+([^/]+)(\/.*)$/.exec(uri)
+      if (match) {
+        const hostname = match[1]
+        const folderPath = match[2] || '/'
+
+        if (!hostFolders.has(hostname)) {
+          hostFolders.set(hostname, [])
+        }
+
+        const folders = hostFolders.get(hostname)!
+        if (!folders.includes(folderPath)) {
+          folders.push(folderPath)
+        }
+      }
+    }
+  }
+  catch (error) {
+    console.error('Failed to read VS Code storage:', error)
   }
 
-  getForHost(host: string): RecentConnection[] {
-    return this.getAll().filter(e => e.host === host)
-  }
+  return hostFolders
 }
 
 export class SSHHostItem extends TreeItem {
@@ -49,26 +90,35 @@ export class SSHHostItem extends TreeItem {
     public readonly hostName: string,
     public readonly description: string | undefined,
     hasRecentFolders: boolean,
+    isConnected: boolean = false,
   ) {
     super(hostName, hasRecentFolders
       ? TreeItemCollapsibleState.Collapsed
       : TreeItemCollapsibleState.None)
-    this.contextValue = 'host'
-    this.iconPath = new ThemeIcon('server')
+    this.contextValue = isConnected ? 'host-connected' : 'host'
+
+    // Use 'vm' icon (same as VS Code Remote SSH)
+    if (isConnected) {
+      this.iconPath = new ThemeIcon('vm-active') || new ThemeIcon('vm', new ThemeColor('terminal.ansiGreen'))
+      this.tooltip = `SSH Host: ${hostName} (Connected)`
+    }
+    else {
+      this.iconPath = new ThemeIcon('vm')
+      this.tooltip = `SSH Host: ${hostName}`
+    }
+
     this.description = description
-    this.tooltip = `SSH Host: ${hostName}`
   }
 }
 
 export class SSHFolderItem extends TreeItem {
   constructor(
     public readonly hostName: string,
-    folder: string,
+    public readonly folder: string,
   ) {
     super(folder, TreeItemCollapsibleState.None)
     this.contextValue = 'folder'
     this.iconPath = new ThemeIcon('folder')
-    this.description = folder
     this.tooltip = `${hostName}:${folder}`
   }
 }
@@ -125,8 +175,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event
 
   private hostsCache: SSHHostItem[] = []
-
-  constructor(private recentManager: RecentConnectionsManager) {}
+  private recentFolders: Map<string, string[]> = new Map()
 
   refresh(): void {
     this._onDidChangeTreeData.fire()
@@ -134,13 +183,18 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
 
   async getHosts(): Promise<SSHHostItem[]> {
     const entries = await parseSSHConfig()
-    this.hostsCache = entries.map(
-      e => new SSHHostItem(
+    const currentHost = getCurrentSSHHost()
+    this.recentFolders = await getRecentSSHConnections()
+
+    this.hostsCache = entries.map((e) => {
+      const hasRecent = this.recentFolders.has(e.host) || this.recentFolders.has(e.hostname || '')
+      return new SSHHostItem(
         e.host,
         e.hostname,
-        this.recentManager.getForHost(e.host).length > 0,
-      ),
-    )
+        hasRecent,
+        e.host === currentHost || e.hostname === currentHost,
+      )
+    })
     return this.hostsCache
   }
 
@@ -163,12 +217,15 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
       return this.getHosts()
 
     if (element instanceof SSHHostItem) {
-      const recent = this.recentManager.getForHost(element.hostName)
-      if (recent.length === 0)
-        return [new SSHFolderItem(element.hostName, '/')]
-      return recent.map(
-        r => new SSHFolderItem(element.hostName, r.folder),
-      )
+      // Get recent folders for this host from VS Code storage
+      const folders = this.recentFolders.get(element.hostName)
+        || this.recentFolders.get(element.description || '')
+        || []
+
+      if (folders.length === 0)
+        return []
+
+      return folders.map(folder => new SSHFolderItem(element.hostName, folder))
     }
 
     return []
@@ -177,7 +234,6 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
 
 export async function connectHost(
   hostName: string,
-  recentManager: RecentConnectionsManager,
   provider: SSHExplorerProvider,
   reuseWindow: boolean,
 ): Promise<void> {
@@ -201,31 +257,38 @@ export async function connectHost(
     })
   }
 
-  await recentManager.add(hostName)
   provider.refresh()
 }
 
 export async function connectFolder(
   hostName: string,
   folder: string,
-  recentManager: RecentConnectionsManager,
   provider: SSHExplorerProvider,
   reuseWindow: boolean,
 ): Promise<void> {
+  const command = reuseWindow
+    ? 'opensshremotes.openEmptyWindowInCurrentWindow'
+    : 'opensshremotes.openEmptyWindow'
+
   try {
-    await commands.executeCommand(
-      'opensshremotes.openEmptyWindowInCurrentWindow',
-      { host: hostName, folder },
+    await window.withProgress(
+      {
+        location: 15,
+        title: `Connecting to ${hostName}:${folder}...`,
+      },
+      () => commands.executeCommand(command, {
+        host: hostName,
+        folderPath: folder,
+      }),
     )
   }
   catch {
-    // Remote-SSH may not support folder param via fallback
+    // Fallback: open remote window and let user navigate
     await commands.executeCommand('vscode.newWindow', {
       remoteAuthority: `ssh-remote+${hostName}`,
       reuseWindow,
     })
   }
 
-  await recentManager.add(hostName, folder)
   provider.refresh()
 }
