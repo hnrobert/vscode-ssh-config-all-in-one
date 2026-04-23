@@ -54,27 +54,59 @@ function getBaseName(path: string): string {
 }
 
 async function getCurrentSSHHost(): Promise<string | undefined> {
-  // env.remoteName returns something like "ssh-remote+<hex-encoded-json>" when in SSH session
+  // Check if we're in an SSH remote session
   const remoteName = env.remoteName
-  if (!remoteName?.startsWith('ssh-remote+'))
-    return undefined
+  console.log(`[getCurrentSSHHost] env.remoteName = "${remoteName}"`)
 
-  let hostname = remoteName.substring('ssh-remote+'.length)
+  if (remoteName !== 'ssh-remote') {
+    console.log(`[getCurrentSSHHost] Not an SSH remote session`)
+    return undefined
+  }
+
+  // Try to get hostname from workspace URI authority first
+  const workspaceFolder = workspace.workspaceFolders?.[0]
+  if (workspaceFolder) {
+    const authority = workspaceFolder.uri.authority
+    console.log(`[getCurrentSSHHost] Workspace URI authority: "${authority}"`)
+
+    if (authority.startsWith('ssh-remote+')) {
+      let hostname = authority.substring('ssh-remote+'.length)
+      return await decodeSSHHostname(hostname)
+    }
+  }
+
+  // If no workspace folder, we cannot reliably determine the current host
+  // This is a known limitation - the host can only be detected when a folder is open
+  console.log(`[getCurrentSSHHost] No workspace folder - cannot determine current SSH host`)
+  console.log(`[getCurrentSSHHost] Note: Host detection only works when a folder is open in the remote session`)
+  return undefined
+}
+
+async function decodeSSHHostname(hostname: string): Promise<string> {
+  console.log(`[decodeSSHHostname] Input: "${hostname}"`)
 
   // Decode URL-encoded hostname
   hostname = decodeURIComponent(hostname)
+  console.log(`[decodeSSHHostname] After URL decode: "${hostname}"`)
 
   // If it's hex-encoded JSON, decode it
   if (/^[0-9a-f]+$/i.test(hostname)) {
+    console.log(`[decodeSSHHostname] Detected hex-encoded JSON`)
     try {
       const { Buffer } = await import('node:buffer')
       const decoded = Buffer.from(hostname, 'hex').toString('utf-8')
+      console.log(`[decodeSSHHostname] Hex decoded to: "${decoded}"`)
       const hostData = JSON.parse(decoded)
+      console.log(`[decodeSSHHostname] Parsed JSON:`, hostData)
       hostname = hostData.hostName || hostname
+      console.log(`[decodeSSHHostname] Final hostname: "${hostname}"`)
     }
-    catch {
-      // Not hex-encoded JSON, use as-is
+    catch (err) {
+      console.log(`[decodeSSHHostname] Failed to decode hex JSON:`, err)
     }
+  }
+  else {
+    console.log(`[decodeSSHHostname] Not hex-encoded, using as-is: "${hostname}"`)
   }
 
   return hostname
@@ -200,16 +232,27 @@ export class SSHHostItem extends TreeItem {
     public readonly description: string | undefined,
     hasRecentFolders: boolean,
     isConnected: boolean = false,
+    isCollapsed: boolean = false,
   ) {
-    super(hostName, hasRecentFolders
-      ? TreeItemCollapsibleState.Collapsed
-      : TreeItemCollapsibleState.None)
+    // Determine collapsible state based on whether it has folders and collapse state
+    let state: TreeItemCollapsibleState
+    if (!hasRecentFolders) {
+      state = TreeItemCollapsibleState.None
+    }
+    else if (isCollapsed) {
+      state = TreeItemCollapsibleState.Collapsed
+    }
+    else {
+      state = TreeItemCollapsibleState.Expanded
+    }
+
+    super(hostName, state)
     this.contextValue = isConnected ? 'host-connected' : 'host'
 
-    // Use 'vm' icon (same as VS Code Remote SSH)
+    // Use 'vm' or 'vm-active' icon
     if (isConnected) {
-      // Use green color for connected host
-      this.iconPath = new ThemeIcon('vm', new ThemeColor('terminal.ansiGreen'))
+      // Use vm-active icon which has built-in green color
+      this.iconPath = new ThemeIcon('vm-active')
       this.tooltip = `SSH Host: ${hostName} (Connected)`
     }
     else {
@@ -301,6 +344,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
 
   private hostsCache: SSHHostItem[] = []
   private recentFolders: Map<string, string[]> = new Map()
+  private collapsedHosts: Set<string> = new Set()
 
   refresh(): void {
     console.log('[SSH Explorer] Refresh triggered')
@@ -309,26 +353,55 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
     this._onDidChangeTreeData.fire()
   }
 
+  collapseAll(): void {
+    // Mark all hosts as collapsed
+    this.hostsCache.forEach(host => this.collapsedHosts.add(host.hostName))
+    this._onDidChangeTreeData.fire()
+  }
+
+  expandAll(): void {
+    // Clear all collapsed hosts
+    this.collapsedHosts.clear()
+    this._onDidChangeTreeData.fire()
+  }
+
+  isAllCollapsed(): boolean {
+    return this.hostsCache.length > 0 && this.hostsCache.every(host =>
+      host.collapsibleState === TreeItemCollapsibleState.None || this.collapsedHosts.has(host.hostName),
+    )
+  }
+
   async getHosts(): Promise<SSHHostItem[]> {
     console.log('[SSH Explorer] Getting hosts...')
     const entries = await parseSSHConfig()
     const currentHost = await getCurrentSSHHost()
     this.recentFolders = await getRecentSSHConnections()
 
-    console.log(`[SSH Explorer] Current SSH host: ${currentHost}`)
+    console.log(`[SSH Explorer] Current SSH host from env.remoteName: "${currentHost}"`)
+    console.log(`[SSH Explorer] env.remoteName raw value: "${env.remoteName}"`)
     console.log(`[SSH Explorer] Found ${entries.length} hosts in SSH config`)
 
     this.hostsCache = entries.map((e) => {
       const hasRecent = this.recentFolders.has(e.host) || this.recentFolders.has(e.hostname || '')
-      const isConnected = e.host === currentHost || e.hostname === currentHost
+      // Case-insensitive comparison for hostname matching
+      const isConnected = currentHost
+        ? (e.host.toLowerCase() === currentHost.toLowerCase()
+          || Boolean(e.hostname && e.hostname.toLowerCase() === currentHost.toLowerCase()))
+        : false
+      const isCollapsed = this.collapsedHosts.has(e.host)
 
-      console.log(`[SSH Explorer] Host ${e.host} (${e.hostname}): hasRecent=${hasRecent}, isConnected=${isConnected}`)
+      console.log(`[SSH Explorer] Host ${e.host} (${e.hostname}): hasRecent=${hasRecent}, isConnected=${isConnected}, isCollapsed=${isCollapsed}`)
+      if (currentHost) {
+        console.log(`  Comparing: "${e.host}" vs "${currentHost}" = ${e.host.toLowerCase() === currentHost.toLowerCase()}`)
+        console.log(`  Comparing: "${e.hostname}" vs "${currentHost}" = ${e.hostname?.toLowerCase() === currentHost.toLowerCase()}`)
+      }
 
       return new SSHHostItem(
         e.host,
         e.hostname,
         hasRecent,
         isConnected,
+        isCollapsed,
       )
     })
     return this.hostsCache

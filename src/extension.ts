@@ -81,6 +81,24 @@ export function activate(context: ExtensionContext) {
     }),
   )
 
+  // Track collapse/expand state
+  disposable.push(
+    commands.registerCommand('ssh-explorer.toggleCollapseAll', () => {
+      explorerProvider.collapseAll()
+      commands.executeCommand('setContext', 'ssh-explorer.allCollapsed', true)
+    }),
+  )
+
+  disposable.push(
+    commands.registerCommand('ssh-explorer.toggleExpandAll', () => {
+      explorerProvider.expandAll()
+      commands.executeCommand('setContext', 'ssh-explorer.allCollapsed', false)
+    }),
+  )
+
+  // Initialize context
+  commands.executeCommand('setContext', 'ssh-explorer.allCollapsed', false)
+
   disposable.push(
     commands.registerCommand(
       'ssh-explorer.connectCurrentWindow',

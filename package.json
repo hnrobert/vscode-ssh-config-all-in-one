@@ -108,6 +108,16 @@
       {
         "command": "ssh-explorer.revealHost",
         "title": "SSH Explorer: Reveal Host"
+      },
+      {
+        "command": "ssh-explorer.toggleCollapseAll",
+        "title": "Collapse All",
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "ssh-explorer.toggleExpandAll",
+        "title": "Expand All",
+        "icon": "$(expand-all)"
       }
     ],
     "menus": {
@@ -115,6 +125,16 @@
         {
           "command": "ssh-explorer.refresh",
           "when": "view == ssh-explorer-hosts",
+          "group": "navigation"
+        },
+        {
+          "command": "ssh-explorer.toggleCollapseAll",
+          "when": "view == ssh-explorer-hosts && !ssh-explorer.allCollapsed",
+          "group": "navigation"
+        },
+        {
+          "command": "ssh-explorer.toggleExpandAll",
+          "when": "view == ssh-explorer-hosts && ssh-explorer.allCollapsed",
           "group": "navigation"
         }
       ],
