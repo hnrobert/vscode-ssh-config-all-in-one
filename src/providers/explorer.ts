@@ -114,7 +114,7 @@ async function decodeSSHHostname(hostname: string): Promise<string> {
 
 function getCurrentSSHFolder(): string | undefined {
   // Get current workspace folder path if in SSH session
-  if (!env.remoteName?.startsWith('ssh-remote+'))
+  if (env.remoteName !== 'ssh-remote')
     return undefined
 
   const workspaceFolder = workspace.workspaceFolders?.[0]
@@ -122,7 +122,9 @@ function getCurrentSSHFolder(): string | undefined {
     return undefined
 
   // The URI path for remote workspaces
-  return workspaceFolder.uri.path
+  const folderPath = workspaceFolder.uri.path
+  console.log(`[getCurrentSSHFolder] Current folder path: "${folderPath}"`)
+  return folderPath
 }
 
 interface RecentWorkspace {
@@ -249,10 +251,9 @@ export class SSHHostItem extends TreeItem {
     super(hostName, state)
     this.contextValue = isConnected ? 'host-connected' : 'host'
 
-    // Use 'vm' or 'vm-active' icon
+    // Use 'vm-active' icon with green color for connected hosts
     if (isConnected) {
-      // Use vm-active icon which has built-in green color
-      this.iconPath = new ThemeIcon('vm-active')
+      this.iconPath = new ThemeIcon('vm-active', new ThemeColor('charts.green'))
       this.tooltip = `SSH Host: ${hostName} (Connected)`
     }
     else {
@@ -279,7 +280,7 @@ export class SSHFolderItem extends TreeItem {
 
     // Use green color for connected folder
     if (isConnected) {
-      this.iconPath = new ThemeIcon('folder', new ThemeColor('terminal.ansiGreen'))
+      this.iconPath = new ThemeIcon('folder', new ThemeColor('charts.green'))
       this.tooltip = `${hostName}:${displayPath} (Connected)`
     }
     else {
