@@ -56,10 +56,10 @@ function getBaseName(path: string): string {
 async function getCurrentSSHHost(): Promise<string | undefined> {
   // Check if we're in an SSH remote session
   const remoteName = env.remoteName
-  console.log(`[getCurrentSSHHost] env.remoteName = "${remoteName}"`)
+  // console.log(`[getCurrentSSHHost] env.remoteName = "${remoteName}"`)
 
   if (remoteName !== 'ssh-remote') {
-    console.log(`[getCurrentSSHHost] Not an SSH remote session`)
+    // console.log(`[getCurrentSSHHost] Not an SSH remote session`)
     return undefined
   }
 
@@ -67,7 +67,7 @@ async function getCurrentSSHHost(): Promise<string | undefined> {
   const workspaceFolder = workspace.workspaceFolders?.[0]
   if (workspaceFolder) {
     const authority = workspaceFolder.uri.authority
-    console.log(`[getCurrentSSHHost] Workspace URI authority: "${authority}"`)
+    // console.log(`[getCurrentSSHHost] Workspace URI authority: "${authority}"`)
 
     if (authority.startsWith('ssh-remote+')) {
       let hostname = authority.substring('ssh-remote+'.length)
@@ -77,36 +77,36 @@ async function getCurrentSSHHost(): Promise<string | undefined> {
 
   // If no workspace folder, we cannot reliably determine the current host
   // This is a known limitation - the host can only be detected when a folder is open
-  console.log(`[getCurrentSSHHost] No workspace folder - cannot determine current SSH host`)
-  console.log(`[getCurrentSSHHost] Note: Host detection only works when a folder is open in the remote session`)
+  // console.log(`[getCurrentSSHHost] No workspace folder - cannot determine current SSH host`)
+  // console.log(`[getCurrentSSHHost] Note: Host detection only works when a folder is open in the remote session`)
   return undefined
 }
 
 async function decodeSSHHostname(hostname: string): Promise<string> {
-  console.log(`[decodeSSHHostname] Input: "${hostname}"`)
+  // console.log(`[decodeSSHHostname] Input: "${hostname}"`)
 
   // Decode URL-encoded hostname
   hostname = decodeURIComponent(hostname)
-  console.log(`[decodeSSHHostname] After URL decode: "${hostname}"`)
+  // console.log(`[decodeSSHHostname] After URL decode: "${hostname}"`)
 
   // If it's hex-encoded JSON, decode it
   if (/^[0-9a-f]+$/i.test(hostname)) {
-    console.log(`[decodeSSHHostname] Detected hex-encoded JSON`)
+    // console.log(`[decodeSSHHostname] Detected hex-encoded JSON`)
     try {
       const { Buffer } = await import('node:buffer')
       const decoded = Buffer.from(hostname, 'hex').toString('utf-8')
-      console.log(`[decodeSSHHostname] Hex decoded to: "${decoded}"`)
+      // console.log(`[decodeSSHHostname] Hex decoded to: "${decoded}"`)
       const hostData = JSON.parse(decoded)
-      console.log(`[decodeSSHHostname] Parsed JSON:`, hostData)
+      // console.log(`[decodeSSHHostname] Parsed JSON:`, hostData)
       hostname = hostData.hostName || hostname
-      console.log(`[decodeSSHHostname] Final hostname: "${hostname}"`)
+      // console.log(`[decodeSSHHostname] Final hostname: "${hostname}"`)
     }
     catch (err) {
-      console.log(`[decodeSSHHostname] Failed to decode hex JSON:`, err)
+      // console.log(`[decodeSSHHostname] Failed to decode hex JSON:`, err)
     }
   }
   else {
-    console.log(`[decodeSSHHostname] Not hex-encoded, using as-is: "${hostname}"`)
+    // console.log(`[decodeSSHHostname] Not hex-encoded, using as-is: "${hostname}"`)
   }
 
   return hostname
@@ -123,7 +123,7 @@ function getCurrentSSHFolder(): string | undefined {
 
   // The URI path for remote workspaces
   const folderPath = workspaceFolder.uri.path
-  console.log(`[getCurrentSSHFolder] Current folder path: "${folderPath}"`)
+  // console.log(`[getCurrentSSHFolder] Current folder path: "${folderPath}"`)
   return folderPath
 }
 
@@ -171,7 +171,7 @@ async function getRecentSSHConnections(): Promise<Map<string, string[]>> {
         const data = JSON.parse(stdout.trim())
         const entries: RecentWorkspace[] = data.entries || []
 
-        console.log(`[SSH Explorer] Found ${entries.length} total entries`)
+        // console.log(`[SSH Explorer] Found ${entries.length} total entries`)
 
         for (const entry of entries) {
           const uri = entry.folderUri || entry.workspace?.configPath
@@ -208,21 +208,21 @@ async function getRecentSSHConnections(): Promise<Map<string, string[]>> {
           }
         }
 
-        console.log(`[SSH Explorer] Parsed ${hostFolders.size} SSH hosts with folders:`)
+        // console.log(`[SSH Explorer] Parsed ${hostFolders.size} SSH hosts with folders:`)
         for (const [host, folders] of hostFolders.entries()) {
-          console.log(`  ${host}: ${folders.length} folders`)
+          // console.log(`  ${host}: ${folders.length} folders`)
         }
       }
       else {
-        console.log('[SSH Explorer] No data returned from SQLite query')
+        // console.log('[SSH Explorer] No data returned from SQLite query')
       }
     }
     catch (sqliteError) {
-      console.error('[SSH Explorer] Failed to read SQLite database:', sqliteError)
+      // console.error('[SSH Explorer] Failed to read SQLite database:', sqliteError)
     }
   }
   catch (error) {
-    console.error('[SSH Explorer] Failed to get recent SSH connections:', error)
+    // console.error('[SSH Explorer] Failed to get recent SSH connections:', error)
   }
 
   return hostFolders
@@ -348,7 +348,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   private collapsedHosts: Set<string> = new Set()
 
   refresh(): void {
-    console.log('[SSH Explorer] Refresh triggered')
+    // console.log('[SSH Explorer] Refresh triggered')
     this.hostsCache = []
     this.recentFolders.clear()
     this._onDidChangeTreeData.fire()
@@ -373,14 +373,14 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   }
 
   async getHosts(): Promise<SSHHostItem[]> {
-    console.log('[SSH Explorer] Getting hosts...')
+    // console.log('[SSH Explorer] Getting hosts...')
     const entries = await parseSSHConfig()
     const currentHost = await getCurrentSSHHost()
     this.recentFolders = await getRecentSSHConnections()
 
-    console.log(`[SSH Explorer] Current SSH host from env.remoteName: "${currentHost}"`)
-    console.log(`[SSH Explorer] env.remoteName raw value: "${env.remoteName}"`)
-    console.log(`[SSH Explorer] Found ${entries.length} hosts in SSH config`)
+    // console.log(`[SSH Explorer] Current SSH host from env.remoteName: "${currentHost}"`)
+    // console.log(`[SSH Explorer] env.remoteName raw value: "${env.remoteName}"`)
+    // console.log(`[SSH Explorer] Found ${entries.length} hosts in SSH config`)
 
     this.hostsCache = entries.map((e) => {
       const hasRecent = this.recentFolders.has(e.host) || this.recentFolders.has(e.hostname || '')
@@ -391,10 +391,10 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         : false
       const isCollapsed = this.collapsedHosts.has(e.host)
 
-      console.log(`[SSH Explorer] Host ${e.host} (${e.hostname}): hasRecent=${hasRecent}, isConnected=${isConnected}, isCollapsed=${isCollapsed}`)
+      // console.log(`[SSH Explorer] Host ${e.host} (${e.hostname}): hasRecent=${hasRecent}, isConnected=${isConnected}, isCollapsed=${isCollapsed}`)
       if (currentHost) {
-        console.log(`  Comparing: "${e.host}" vs "${currentHost}" = ${e.host.toLowerCase() === currentHost.toLowerCase()}`)
-        console.log(`  Comparing: "${e.hostname}" vs "${currentHost}" = ${e.hostname?.toLowerCase() === currentHost.toLowerCase()}`)
+        // console.log(`  Comparing: "${e.host}" vs "${currentHost}" = ${e.host.toLowerCase() === currentHost.toLowerCase()}`)
+        // console.log(`  Comparing: "${e.hostname}" vs "${currentHost}" = ${e.hostname?.toLowerCase() === currentHost.toLowerCase()}`)
       }
 
       return new SSHHostItem(
@@ -432,7 +432,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         || this.recentFolders.get(element.description || '')
         || []
 
-      console.log(`[SSH Explorer] Getting children for host ${element.hostName}: ${folders.length} folders`)
+      // console.log(`[SSH Explorer] Getting children for host ${element.hostName}: ${folders.length} folders`)
 
       if (folders.length === 0)
         return []
@@ -442,12 +442,12 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
       const currentFolder = getCurrentSSHFolder()
       const isThisHostConnected = element.hostName === currentHost || element.description === currentHost
 
-      console.log(`[SSH Explorer] Current host: ${currentHost}, Current folder: ${currentFolder}`)
-      console.log(`[SSH Explorer] This host: ${element.hostName}, isThisHostConnected: ${isThisHostConnected}`)
+      // console.log(`[SSH Explorer] Current host: ${currentHost}, Current folder: ${currentFolder}`)
+      // console.log(`[SSH Explorer] This host: ${element.hostName}, isThisHostConnected: ${isThisHostConnected}`)
 
       return folders.map((folder) => {
         const isFolderConnected = isThisHostConnected && currentFolder === folder
-        console.log(`[SSH Explorer] Folder ${folder}: isConnected=${isFolderConnected} (currentFolder=${currentFolder})`)
+        // console.log(`[SSH Explorer] Folder ${folder}: isConnected=${isFolderConnected} (currentFolder=${currentFolder})`)
         return new SSHFolderItem(element.hostName, folder, isFolderConnected)
       })
     }
