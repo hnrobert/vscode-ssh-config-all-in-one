@@ -1,5 +1,5 @@
 import type { Disposable, ExtensionContext } from 'vscode'
-import { commands, window } from 'vscode'
+import { commands, Position, SnippetString, Uri, window, workspace } from 'vscode'
 import { copyPublicKey, openUserConfig } from './functions'
 import {
   connectFolder,
@@ -179,8 +179,29 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'ssh-explorer.addNewHost',
       async (item: { filePath: string }) => {
-        await openConfigFile(item.filePath)
-        // TODO: Insert template at end of file
+        const input = await window.showInputBox({
+          prompt: 'Enter SSH connection command (e.g. ssh user@hostname) or host alias',
+          placeHolder: 'user@hostname',
+          title: 'Add New SSH Host',
+        })
+        if (!input)
+          return
+
+        const { host, hostname } = parseSSHInput(input)
+
+        const doc = await workspace.openTextDocument(Uri.file(item.filePath))
+        const editor = await window.showTextDocument(doc)
+
+        const lastLine = doc.lineAt(doc.lineCount - 1)
+        const prefix = lastLine.text.trimEnd().length > 0 ? '\n\n' : '\n'
+
+        const pos = new Position(doc.lineCount - 1, lastLine.text.length)
+        await editor.insertSnippet(
+          new SnippetString(`${prefix}Host \${1:${host}}\n    HostName \${2:${hostname}}\n    User \${3}\n`),
+          pos,
+        )
+
+        explorerProvider.refresh()
       },
     ),
   )
@@ -205,4 +226,31 @@ export function activate(context: ExtensionContext) {
 
 export function deactivate() {
   // noop
+}
+
+function parseSSHInput(input: string): { host: string, hostname: string } {
+  const trimmed = input.trim()
+
+  // ssh user@hostname
+  const sshMatch = /^ssh\s+([^@\s]+)@([^\s@]+)$/i.exec(trimmed)
+  if (sshMatch) {
+    const user = sshMatch[1]
+    const addr = sshMatch[2]
+    return { host: `${user}@${addr}`, hostname: addr }
+  }
+
+  // ssh hostname
+  const sshHostMatch = /^ssh\s+([^\s@]+)$/i.exec(trimmed)
+  if (sshHostMatch) {
+    return { host: sshHostMatch[1], hostname: sshHostMatch[1] }
+  }
+
+  // user@hostname
+  const atMatch = /^[^@\s]+@([^\s@]+)$/.exec(trimmed)
+  if (atMatch) {
+    return { host: trimmed, hostname: atMatch[1] }
+  }
+
+  // plain hostname or alias
+  return { host: trimmed, hostname: trimmed }
 }
