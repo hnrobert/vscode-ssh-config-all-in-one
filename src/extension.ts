@@ -180,7 +180,7 @@ export function activate(context: ExtensionContext) {
       'ssh-explorer.addNewHost',
       async (item: { filePath: string }) => {
         const input = await window.showInputBox({
-          prompt: 'Enter SSH connection command (e.g. ssh user@hostname) or host alias',
+          prompt: 'Enter SSH connection command or host alias',
           placeHolder: 'user@hostname',
           title: 'Add New SSH Host',
         })
