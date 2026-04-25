@@ -15,6 +15,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   private hostsCache: Map<string, SSHHostItem[]> = new Map()
   private recentFolders: Map<string, string[]> = new Map()
   private collapsedHosts: Set<string> = new Set()
+  private collapsedConfigFiles: Set<string> = new Set()
   private recentFoldersLoaded = false
   private currentHostCache: string | undefined
 
@@ -28,14 +29,25 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   }
 
   collapseAll(): void {
+    // Mark all config files as collapsed
+    this.configFilesCache.forEach(file => this.collapsedConfigFiles.add(file.filePath))
+    // Mark all hosts as collapsed
     this.hostsCache.forEach(hosts =>
       hosts.forEach(host => this.collapsedHosts.add(host.hostName)),
     )
+    // Clear caches to force recreation with new state
+    this.configFilesCache = []
+    this.hostsCache.clear()
     this._onDidChangeTreeData.fire()
   }
 
   expandAll(): void {
+    // Clear all collapsed states
+    this.collapsedConfigFiles.clear()
     this.collapsedHosts.clear()
+    // Clear caches to force recreation with new state
+    this.configFilesCache = []
+    this.hostsCache.clear()
     this._onDidChangeTreeData.fire()
   }
 
@@ -45,7 +57,12 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
 
     const configFiles = await getSSHConfigFiles()
     this.configFilesCache = configFiles.map(file =>
-      new SSHConfigFileItem(file.path, file.label, file.hosts.length),
+      new SSHConfigFileItem(
+        file.path,
+        file.label,
+        file.hosts.length,
+        this.collapsedConfigFiles.has(file.path),
+      ),
     )
 
     // Start loading current host in background
@@ -57,8 +74,9 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   private async loadCurrentHostInBackground(): Promise<void> {
     if (!this.currentHostCache) {
       this.currentHostCache = await getCurrentSSHHost()
-      // Refresh hosts to update connection status
-      if (this.currentHostCache && this.hostsCache.size > 0) {
+      // Clear hosts cache to force recreation with connection status
+      if (this.currentHostCache) {
+        this.hostsCache.clear()
         this._onDidChangeTreeData.fire()
       }
     }
@@ -68,10 +86,10 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
     if (!this.recentFoldersLoaded) {
       this.recentFolders = await getRecentSSHConnections()
       this.recentFoldersLoaded = true
-      // Refresh hosts to update folder indicators
-      if (this.hostsCache.size > 0) {
-        this._onDidChangeTreeData.fire()
-      }
+      // Clear hosts cache to force recreation with folder info
+      this.hostsCache.clear()
+      // Refresh to update folder indicators
+      this._onDidChangeTreeData.fire()
     }
   }
 
