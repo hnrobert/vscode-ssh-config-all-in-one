@@ -23,7 +23,11 @@ export class SSHHostItem extends TreeItem {
     }
 
     super(hostName, state)
-    this.id = isCollapsed ? `${configFile}:${hostName}::c` : `${configFile}:${hostName}`
+    this.id = isCollapsed
+      ? `${configFile}:${hostName}::c`
+      : hasRecentFolders
+        ? `${configFile}:${hostName}::f`
+        : `${configFile}:${hostName}`
     this.contextValue = isConnected ? 'host-connected' : 'host'
 
     // Use 'vm-active' icon with green color for connected hosts
