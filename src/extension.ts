@@ -12,6 +12,7 @@ import {
   SSHFormatProvider,
   SSHHoverProvider,
 } from './providers'
+import { getAllSSHHosts } from './utils/sshDetection'
 
 export function activate(context: ExtensionContext) {
   const subscriptions = context.subscriptions
@@ -124,6 +125,43 @@ export function activate(context: ExtensionContext) {
 
   // Initialize context
   commands.executeCommand('setContext', 'ssh-explorer.allCollapsed', false)
+
+  // Locate current remote host in explorer
+  let locateIndex = 0
+  disposable.push(
+    commands.registerCommand('ssh-explorer.locateCurrentHost', async () => {
+      const hosts = await getAllSSHHosts()
+      if (hosts.length === 0)
+        return
+
+      // Cycle through hosts if multiple
+      const hostName = hosts[locateIndex % hosts.length]
+      locateIndex = (locateIndex + 1) % hosts.length
+
+      // Ensure the explorer view is visible
+      await commands.executeCommand('workbench.view.remote')
+
+      // Load config files so hosts are parsed
+      await explorerProvider.getConfigFiles()
+
+      const item = explorerProvider.findHostItem(hostName)
+      if (item) {
+        await treeView.reveal(item, {
+          expand: true,
+          focus: true,
+          select: true,
+        })
+      }
+    }),
+  )
+
+  // Update hasRemote context when workspace changes
+  const updateRemoteContext = async () => {
+    const hosts = await getAllSSHHosts()
+    commands.executeCommand('setContext', 'ssh-explorer.hasRemote', hosts.length > 0)
+  }
+  updateRemoteContext()
+  disposable.push(workspace.onDidChangeWorkspaceFolders(() => updateRemoteContext()))
 
   disposable.push(
     commands.registerCommand(

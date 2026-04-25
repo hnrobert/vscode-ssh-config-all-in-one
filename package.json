@@ -152,6 +152,11 @@
         "command": "ssh-explorer.addConfigFile",
         "title": "Add Config File",
         "icon": "$(add)"
+      },
+      {
+        "command": "ssh-explorer.locateCurrentHost",
+        "title": "Locate Current Host",
+        "icon": "$(target)"
       }
     ],
     "menus": {
@@ -162,19 +167,24 @@
           "group": "navigation@1"
         },
         {
+          "command": "ssh-explorer.locateCurrentHost",
+          "when": "view == ssh-explorer-hosts && ssh-explorer.hasRemote",
+          "group": "navigation@2"
+        },
+        {
           "command": "ssh-explorer.refresh",
           "when": "view == ssh-explorer-hosts",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "ssh-explorer.toggleCollapseAll",
           "when": "view == ssh-explorer-hosts && !ssh-explorer.allCollapsed",
-          "group": "navigation@3"
+          "group": "navigation@4"
         },
         {
           "command": "ssh-explorer.toggleExpandAll",
           "when": "view == ssh-explorer-hosts && ssh-explorer.allCollapsed",
-          "group": "navigation@3"
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
