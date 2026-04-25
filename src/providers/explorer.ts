@@ -51,6 +51,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         file.label,
         file.hosts.length,
         this.allCollapsed,
+        file.isCustom,
       ),
     )
 

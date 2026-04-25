@@ -423,6 +423,38 @@ export function activate(context: ExtensionContext) {
     ),
   )
 
+  // Ignore auto-discovered config file (add to exclude list)
+  disposable.push(
+    commands.registerCommand(
+      'ssh-explorer.ignoreConfigFile',
+      async (item: { filePath: string }) => {
+        const cfg = workspace.getConfiguration('sshConfigAllInOne.config')
+        const current = cfg.get<string[]>('excludeDefaultFiles', [])
+        if (current.includes(item.filePath))
+          return
+        await cfg.update('excludeDefaultFiles', [...current, item.filePath], true)
+        explorerProvider.refresh()
+      },
+    ),
+  )
+
+  // Remove manually added config file from list
+  disposable.push(
+    commands.registerCommand(
+      'ssh-explorer.removeConfigFile',
+      async (item: { filePath: string }) => {
+        const cfg = workspace.getConfiguration('sshConfigAllInOne.config')
+        const current = cfg.get<string[]>('additionalFiles', [])
+        // Match either raw path or resolved path
+        const filtered = current.filter(p => p !== item.filePath && p.replace(/^~/, '') !== item.filePath.replace(/^~/, ''))
+        if (filtered.length === current.length)
+          return
+        await cfg.update('additionalFiles', filtered, true)
+        explorerProvider.refresh()
+      },
+    ),
+  )
+
   new SSHCompletionItemsProvider(disposable)
   new SSHHoverProvider(disposable)
   new SSHDocumentLinkProvider(disposable)

@@ -165,6 +165,14 @@
         "title": "Remove from Recent List"
       },
       {
+        "command": "ssh-explorer.ignoreConfigFile",
+        "title": "Ignore This Config File"
+      },
+      {
+        "command": "ssh-explorer.removeConfigFile",
+        "title": "Remove from List"
+      },
+      {
         "command": "ssh-explorer.searchHosts",
         "title": "Search Hosts",
         "icon": "$(search)"
@@ -216,13 +224,23 @@
       "view/item/context": [
         {
           "command": "ssh-explorer.openConfigFile",
-          "when": "view == ssh-explorer-hosts && viewItem == config-file",
+          "when": "view == ssh-explorer-hosts && viewItem =~ /config-file/",
           "group": "inline@1"
         },
         {
           "command": "ssh-explorer.addNewHost",
-          "when": "view == ssh-explorer-hosts && viewItem == config-file",
+          "when": "view == ssh-explorer-hosts && viewItem =~ /config-file/",
           "group": "inline@2"
+        },
+        {
+          "command": "ssh-explorer.ignoreConfigFile",
+          "when": "view == ssh-explorer-hosts && viewItem == config-file",
+          "group": "3_remove@1"
+        },
+        {
+          "command": "ssh-explorer.removeConfigFile",
+          "when": "view == ssh-explorer-hosts && viewItem == config-file-custom",
+          "group": "3_remove@1"
         },
 
         {

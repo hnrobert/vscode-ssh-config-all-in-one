@@ -17,6 +17,7 @@ export interface SSHConfigFile {
   path: string
   label: string
   hosts: HostEntry[]
+  isCustom?: boolean
 }
 
 function resolveTilde(p: string): string {
@@ -68,6 +69,7 @@ export async function getSSHConfigFiles(): Promise<SSHConfigFile[]> {
           path,
           label: `${basename(path)} (${rawPath})`,
           hosts,
+          isCustom: true,
         }
       }),
     )
