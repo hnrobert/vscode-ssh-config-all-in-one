@@ -57,7 +57,26 @@
         "sshConfigAllInOne.format.indentSize": {
           "type": "integer",
           "default": 2,
+          "order": 1,
           "markdownDescription": "The number of spaces used for indentation"
+        },
+        "sshConfigAllInOne.config.additionalFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "order": 2,
+          "markdownDescription": "Additional SSH config file paths to show in the explorer. Supports `~` for home directory. Use the `+` button in the explorer title bar to add files, or edit this list directly to reorder or remove entries."
+        },
+        "sshConfigAllInOne.config.excludeDefaultFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "order": 3,
+          "markdownDescription": "Default SSH config file paths to exclude from the explorer. Supports `~` for home directory. Example: `~/.ssh/config` or `/etc/ssh/ssh_config`"
         }
       }
     },
@@ -77,18 +96,13 @@
       },
       {
         "command": "ssh-explorer.refresh",
-        "title": "SSH Explorer: Refresh",
+        "title": "Refresh",
         "icon": "$(refresh)"
       },
       {
         "command": "ssh-explorer.connectCurrentWindow",
         "title": "Connect in Current Window",
         "icon": "$(arrow-right)"
-      },
-      {
-        "command": "ssh-explorer.connectNewWindow",
-        "title": "Connect in New Window",
-        "icon": "$(empty-window)"
       },
       {
         "command": "ssh-explorer.connectNewWindow",
@@ -133,24 +147,34 @@
         "command": "ssh-explorer.openHostInConfig",
         "title": "Open in Config",
         "icon": "$(gear)"
+      },
+      {
+        "command": "ssh-explorer.addConfigFile",
+        "title": "Add Config File",
+        "icon": "$(add)"
       }
     ],
     "menus": {
       "view/title": [
         {
+          "command": "ssh-explorer.addConfigFile",
+          "when": "view == ssh-explorer-hosts",
+          "group": "navigation@1"
+        },
+        {
           "command": "ssh-explorer.refresh",
           "when": "view == ssh-explorer-hosts",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "ssh-explorer.toggleCollapseAll",
           "when": "view == ssh-explorer-hosts && !ssh-explorer.allCollapsed",
-          "group": "navigation"
+          "group": "navigation@3"
         },
         {
           "command": "ssh-explorer.toggleExpandAll",
           "when": "view == ssh-explorer-hosts && ssh-explorer.allCollapsed",
-          "group": "navigation"
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [

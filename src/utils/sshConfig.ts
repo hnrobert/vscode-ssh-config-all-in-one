@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
-import { env } from 'vscode'
+import { env, workspace } from 'vscode'
 
 const readFileAsync = promisify(readFile)
 
@@ -19,38 +19,70 @@ export interface SSHConfigFile {
   hosts: HostEntry[]
 }
 
+function resolveTilde(p: string): string {
+  return p.startsWith('~/') ? join(homedir(), p.slice(2)) : p
+}
+
+function getConfigSettings() {
+  const cfg = workspace.getConfiguration('sshConfigAllInOne.config')
+  return {
+    additionalFiles: cfg.get<string[]>('additionalFiles', []),
+    excludeDefaultFiles: cfg.get<string[]>('excludeDefaultFiles', []),
+  }
+}
+
 export async function getSSHConfigFiles(): Promise<SSHConfigFile[]> {
   const configFiles: SSHConfigFile[] = []
+  const { additionalFiles, excludeDefaultFiles } = getConfigSettings()
+  const excludeSet = new Set(excludeDefaultFiles.map(resolveTilde))
 
-  // Load configs in parallel for better performance
-  const [userHosts, systemHosts] = await Promise.all([
-    parseSSHConfigFile(join(homedir(), '.ssh', 'config')),
-    parseSSHConfigFile('/etc/ssh/ssh_config'),
-  ])
+  // Load default configs in parallel
+  const defaultPaths = [
+    { path: join(homedir(), '.ssh', 'config'), label: 'User Config (~/.ssh/config)' },
+    { path: '/etc/ssh/ssh_config', label: 'System Config (/etc/ssh/ssh_config)' },
+  ]
 
-  // User config
-  if (userHosts.length > 0) {
-    configFiles.push({
-      path: join(homedir(), '.ssh', 'config'),
-      label: 'User Config (~/.ssh/config)',
-      hosts: userHosts,
-    })
+  const defaultResults = await Promise.all(
+    defaultPaths.map(async ({ path, label }) => {
+      if (excludeSet.has(path))
+        return null
+      const hosts = await parseSSHConfigFile(path)
+      return hosts.length > 0 ? { path, label, hosts } : null
+    }),
+  )
+
+  for (const result of defaultResults) {
+    if (result)
+      configFiles.push(result)
   }
 
-  // System config (if accessible)
-  if (systemHosts.length > 0) {
-    configFiles.push({
-      path: '/etc/ssh/ssh_config',
-      label: 'System Config (/etc/ssh/ssh_config)',
-      hosts: systemHosts,
-    })
+  // Load additional config files from settings
+  if (additionalFiles.length > 0) {
+    const additionalResults = await Promise.all(
+      additionalFiles.map(async (rawPath) => {
+        const path = resolveTilde(rawPath)
+        const hosts = await parseSSHConfigFile(path)
+        if (hosts.length === 0)
+          return null
+        return {
+          path,
+          label: `${basename(path)} (${rawPath})`,
+          hosts,
+        }
+      }),
+    )
+
+    for (const result of additionalResults) {
+      if (result)
+        configFiles.push(result)
+    }
   }
 
   // Remote config (if in remote session)
   if (env.remoteName === 'ssh-remote') {
     const remoteConfigPath = join(homedir(), '.ssh', 'config')
     const userConfigPath = join(homedir(), '.ssh', 'config')
-    if (remoteConfigPath !== userConfigPath) {
+    if (remoteConfigPath !== userConfigPath && !excludeSet.has(remoteConfigPath)) {
       const remoteHosts = await parseSSHConfigFile(remoteConfigPath)
       if (remoteHosts.length > 0) {
         configFiles.push({

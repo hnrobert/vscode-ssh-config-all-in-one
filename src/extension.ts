@@ -82,6 +82,31 @@ export function activate(context: ExtensionContext) {
     }),
   )
 
+  // Add config file from file picker
+  disposable.push(
+    commands.registerCommand('ssh-explorer.addConfigFile', async () => {
+      const result = await window.showOpenDialog({
+        title: 'Select SSH Config File',
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: false,
+      })
+      if (!result || result.length === 0)
+        return
+
+      const filePath = result[0].fsPath
+      const cfg = workspace.getConfiguration('sshConfigAllInOne.config')
+      const current = cfg.get<string[]>('additionalFiles', [])
+
+      // Dedup by resolved path
+      if (current.includes(filePath))
+        return
+
+      await cfg.update('additionalFiles', [...current, filePath], true)
+      explorerProvider.refresh()
+    }),
+  )
+
   // Collapse/expand all
   disposable.push(
     commands.registerCommand('ssh-explorer.toggleCollapseAll', () => {
