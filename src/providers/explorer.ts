@@ -1,5 +1,5 @@
 import type { TreeDataProvider, TreeItem } from 'vscode'
-import { commands, EventEmitter, Uri, window } from 'vscode'
+import { commands, EventEmitter, Uri, window, workspace } from 'vscode'
 import { SSHConfigFileItem } from '../models/SSHConfigFileItem'
 import { SSHFolderItem } from '../models/SSHFolderItem'
 import { SSHHostItem } from '../models/SSHHostItem'
@@ -178,7 +178,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
 
       return folders.map((folder) => {
         const isFolderConnected = isThisHostConnected && currentFolder === folder
-        return new SSHFolderItem(element.hostName, folder, isFolderConnected)
+        return new SSHFolderItem(element.hostName, folder, isFolderConnected, element.configFile)
       })
     }
 
@@ -186,11 +186,21 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   }
 }
 
+async function setRemoteSSHConfigFile(configFile: string | undefined): Promise<void> {
+  if (!configFile)
+    return
+  const cfg = workspace.getConfiguration('remote.SSH')
+  await cfg.update('configFile', configFile, true)
+}
+
 export async function connectHost(
   hostName: string,
   provider: SSHExplorerProvider,
   reuseWindow: boolean,
+  configFile?: string,
 ): Promise<void> {
+  await setRemoteSSHConfigFile(configFile)
+
   const command = reuseWindow
     ? 'opensshremotes.openEmptyWindowInCurrentWindow'
     : 'opensshremotes.openEmptyWindow'
@@ -219,7 +229,10 @@ export async function connectFolder(
   folder: string,
   provider: SSHExplorerProvider,
   reuseWindow: boolean,
+  configFile?: string,
 ): Promise<void> {
+  await setRemoteSSHConfigFile(configFile)
+
   try {
     const folderUri = Uri.parse(`vscode-remote://ssh-remote+${encodeURIComponent(hostName)}${folder}`)
 

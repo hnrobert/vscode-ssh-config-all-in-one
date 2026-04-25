@@ -60,7 +60,7 @@ export class SSHCodeLensProvider implements CodeLensProvider {
               title: 'Connect in Current Window...',
               tooltip: `Connect to ${hostName} in the current window`,
               command: 'vscode-ssh-config-all-in-one.connectCurrentWindow',
-              arguments: [hostName],
+              arguments: [hostName, document.uri.fsPath],
             }),
           )
 
@@ -69,7 +69,7 @@ export class SSHCodeLensProvider implements CodeLensProvider {
               title: 'Connect in New Window...',
               tooltip: `Connect to ${hostName} in a new window`,
               command: 'vscode-ssh-config-all-in-one.connectNewWindow',
-              arguments: [hostName],
+              arguments: [hostName, document.uri.fsPath],
             }),
           )
 

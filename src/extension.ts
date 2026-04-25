@@ -36,7 +36,10 @@ export function activate(context: ExtensionContext) {
   disposable.push(
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.connectCurrentWindow',
-      (hostStr: string) => {
+      (hostStr: string, configFile?: string) => {
+        if (configFile) {
+          workspace.getConfiguration('remote.SSH').update('configFile', configFile, true)
+        }
         commands
           .executeCommand('opensshremotes.openEmptyWindowInCurrentWindow', {
             host: hostStr,
@@ -54,7 +57,10 @@ export function activate(context: ExtensionContext) {
   disposable.push(
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.connectNewWindow',
-      (hostStr: string) => {
+      (hostStr: string, configFile?: string) => {
+        if (configFile) {
+          workspace.getConfiguration('remote.SSH').update('configFile', configFile, true)
+        }
         commands
           .executeCommand('opensshremotes.openEmptyWindow', { host: hostStr })
           .then(undefined, () => {
@@ -166,8 +172,8 @@ export function activate(context: ExtensionContext) {
   disposable.push(
     commands.registerCommand(
       'ssh-explorer.connectCurrentWindow',
-      (item: { hostName: string }) => {
-        connectHost(item.hostName, explorerProvider, true)
+      (item: { hostName: string, configFile: string }) => {
+        connectHost(item.hostName, explorerProvider, true, item.configFile)
       },
     ),
   )
@@ -175,8 +181,8 @@ export function activate(context: ExtensionContext) {
   disposable.push(
     commands.registerCommand(
       'ssh-explorer.connectNewWindow',
-      (item: { hostName: string }) => {
-        connectHost(item.hostName, explorerProvider, false)
+      (item: { hostName: string, configFile: string }) => {
+        connectHost(item.hostName, explorerProvider, false, item.configFile)
       },
     ),
   )
@@ -184,8 +190,8 @@ export function activate(context: ExtensionContext) {
   disposable.push(
     commands.registerCommand(
       'ssh-explorer.connectFolderCurrentWindow',
-      (item: { hostName: string, folder: string }) => {
-        connectFolder(item.hostName, item.folder, explorerProvider, true)
+      (item: { hostName: string, folder: string, configFile?: string }) => {
+        connectFolder(item.hostName, item.folder, explorerProvider, true, item.configFile)
       },
     ),
   )
@@ -193,8 +199,8 @@ export function activate(context: ExtensionContext) {
   disposable.push(
     commands.registerCommand(
       'ssh-explorer.connectFolderNewWindow',
-      (item: { hostName: string, folder: string }) => {
-        connectFolder(item.hostName, item.folder, explorerProvider, false)
+      (item: { hostName: string, folder: string, configFile?: string }) => {
+        connectFolder(item.hostName, item.folder, explorerProvider, false, item.configFile)
       },
     ),
   )

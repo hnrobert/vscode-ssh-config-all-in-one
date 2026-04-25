@@ -6,6 +6,7 @@ export class SSHFolderItem extends TreeItem {
     public readonly hostName: string,
     public readonly folder: string,
     isConnected: boolean = false,
+    public readonly configFile?: string,
   ) {
     // Use folder name as label, full path as description
     const folderName = getBaseName(folder)
