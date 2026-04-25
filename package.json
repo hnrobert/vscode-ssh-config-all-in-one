@@ -65,7 +65,7 @@
       "remote": [
         {
           "id": "ssh-explorer-hosts",
-          "name": "SSH Config Hosts",
+          "name": "SSH Config All In One",
           "group": "targets@2"
         }
       ]
@@ -118,6 +118,21 @@
         "command": "ssh-explorer.toggleExpandAll",
         "title": "Expand All",
         "icon": "$(expand-all)"
+      },
+      {
+        "command": "ssh-explorer.openConfigFile",
+        "title": "Open Config File",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "ssh-explorer.addNewHost",
+        "title": "Add New Host",
+        "icon": "$(add)"
+      },
+      {
+        "command": "ssh-explorer.openHostInConfig",
+        "title": "Open in Config",
+        "icon": "$(gear)"
       }
     ],
     "menus": {
@@ -140,14 +155,29 @@
       ],
       "view/item/context": [
         {
+          "command": "ssh-explorer.openConfigFile",
+          "when": "view == ssh-explorer-hosts && viewItem == config-file",
+          "group": "inline@1"
+        },
+        {
+          "command": "ssh-explorer.addNewHost",
+          "when": "view == ssh-explorer-hosts && viewItem == config-file",
+          "group": "inline@2"
+        },
+        {
+          "command": "ssh-explorer.openHostInConfig",
+          "when": "view == ssh-explorer-hosts && viewItem =~ /host/",
+          "group": "inline@1"
+        },
+        {
           "command": "ssh-explorer.connectCurrentWindow",
           "when": "view == ssh-explorer-hosts && viewItem =~ /host/",
-          "group": "inline"
+          "group": "inline@2"
         },
         {
           "command": "ssh-explorer.connectNewWindow",
           "when": "view == ssh-explorer-hosts && viewItem =~ /host/",
-          "group": "inline"
+          "group": "inline@3"
         },
         {
           "command": "ssh-explorer.connectFolderCurrentWindow",

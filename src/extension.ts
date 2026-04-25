@@ -4,6 +4,7 @@ import { copyPublicKey, openUserConfig } from './functions'
 import {
   connectFolder,
   connectHost,
+  openConfigFile,
   SSHCodeLensProvider,
   SSHCompletionItemsProvider,
   SSHDocumentLinkProvider,
@@ -143,8 +144,7 @@ export function activate(context: ExtensionContext) {
           // Ensure the Remote Explorer view is visible
           await commands.executeCommand('workbench.view.remote')
 
-          // Refresh and get hosts
-          await explorerProvider.getHosts()
+          // Refresh and find host
           const item = explorerProvider.findHostItem(hostName)
 
           if (item) {
@@ -161,6 +161,35 @@ export function activate(context: ExtensionContext) {
         catch (error) {
           window.showErrorMessage(`Failed to reveal host: ${error instanceof Error ? error.message : String(error)}`)
         }
+      },
+    ),
+  )
+
+  // New commands for config file management
+  disposable.push(
+    commands.registerCommand(
+      'ssh-explorer.openConfigFile',
+      (item: { filePath: string }) => {
+        openConfigFile(item.filePath)
+      },
+    ),
+  )
+
+  disposable.push(
+    commands.registerCommand(
+      'ssh-explorer.addNewHost',
+      async (item: { filePath: string }) => {
+        await openConfigFile(item.filePath)
+        // TODO: Insert template at end of file
+      },
+    ),
+  )
+
+  disposable.push(
+    commands.registerCommand(
+      'ssh-explorer.openHostInConfig',
+      (item: { configFile: string, lineNumber?: number }) => {
+        openConfigFile(item.configFile, item.lineNumber)
       },
     ),
   )

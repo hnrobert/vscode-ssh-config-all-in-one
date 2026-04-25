@@ -4,6 +4,8 @@ export class SSHHostItem extends TreeItem {
   constructor(
     public readonly hostName: string,
     public readonly description: string | undefined,
+    public readonly configFile: string,
+    public readonly lineNumber: number | undefined,
     hasRecentFolders: boolean,
     isConnected: boolean = false,
     isCollapsed: boolean = false,
