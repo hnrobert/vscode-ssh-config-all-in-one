@@ -83,6 +83,13 @@ export function activate(context: ExtensionContext) {
     ),
   )
 
+  // Open extension settings
+  disposable.push(
+    commands.registerCommand('ssh-explorer.openSettings', () => {
+      commands.executeCommand('workbench.action.openSettings', 'sshConfigAllInOne')
+    }),
+  )
+
   // SSH Explorer commands
   disposable.push(
     commands.registerCommand('ssh-explorer.refresh', () => {
