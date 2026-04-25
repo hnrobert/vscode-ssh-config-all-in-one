@@ -93,15 +93,19 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
     if (!config)
       return []
 
-    // Get current host (use cache if available)
+    // Get current host and the config file Remote-SSH is using
     const currentHost = this.currentHostCache || await getCurrentSSHHost()
     if (!this.currentHostCache)
       this.currentHostCache = currentHost
+    const activeConfigFile = workspace.getConfiguration('remote.SSH').get<string>('configFile')
 
     // Create hosts without waiting for recent folders
     const hosts = config.hosts.map((e) => {
       const hasRecent = this.recentFolders.has(e.host) || this.recentFolders.has(e.hostname || '')
-      const isConnected = currentHost
+      // Only mark as connected if this config file matches what Remote-SSH is using
+      const isConfigActive = !activeConfigFile
+        || configFile.filePath === activeConfigFile
+      const isConnected = currentHost && isConfigActive
         ? (e.host.toLowerCase() === currentHost.toLowerCase()
           || Boolean(e.hostname && e.hostname.toLowerCase() === currentHost.toLowerCase()))
         : false
@@ -130,7 +134,22 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   private excludedFolders: Set<string> = new Set()
 
   findHostItem(hostName: string): SSHHostItem | undefined {
-    for (const hosts of this.hostsCache.values()) {
+    const activeConfigFile = workspace.getConfiguration('remote.SSH').get<string>('configFile')
+
+    // If a specific config file is set, search it first
+    if (activeConfigFile) {
+      const activeHosts = this.hostsCache.get(activeConfigFile)
+      if (activeHosts) {
+        const found = activeHosts.find(h => h.hostName === hostName)
+        if (found)
+          return found
+      }
+    }
+
+    // Fallback: search all config files
+    for (const [configPath, hosts] of this.hostsCache.entries()) {
+      if (configPath === activeConfigFile)
+        continue
       const found = hosts.find(h => h.hostName === hostName)
       if (found)
         return found
@@ -193,7 +212,9 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
 
       const currentHost = this.currentHostCache || await getCurrentSSHHost()
       const currentFolder = getCurrentSSHFolder()
-      const isThisHostConnected = element.hostName === currentHost || element.description === currentHost
+      const activeConfigFile = workspace.getConfiguration('remote.SSH').get<string>('configFile')
+      const isConfigActive = !activeConfigFile || element.configFile === activeConfigFile
+      const isThisHostConnected = isConfigActive && (element.hostName === currentHost || element.description === currentHost)
 
       return folders.map((folder) => {
         const isFolderConnected = isThisHostConnected && currentFolder === folder
