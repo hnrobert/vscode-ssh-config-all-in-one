@@ -149,6 +149,18 @@
         "icon": "$(gear)"
       },
       {
+        "command": "ssh-explorer.sendPublicKey",
+        "title": "Send Public Key..."
+      },
+      {
+        "command": "ssh-explorer.removeHost",
+        "title": "Remove"
+      },
+      {
+        "command": "ssh-explorer.removeRecentFolder",
+        "title": "Remove from Recent List"
+      },
+      {
         "command": "ssh-explorer.searchHosts",
         "title": "Search Hosts",
         "icon": "$(search)"
@@ -208,6 +220,7 @@
           "when": "view == ssh-explorer-hosts && viewItem == config-file",
           "group": "inline@2"
         },
+
         {
           "command": "ssh-explorer.openHostInConfig",
           "when": "view == ssh-explorer-hosts && viewItem =~ /host/",
@@ -224,6 +237,27 @@
           "group": "inline@3"
         },
         {
+          "command": "ssh-explorer.connectCurrentWindow",
+          "when": "view == ssh-explorer-hosts && viewItem =~ /host/",
+          "group": "1_connect@1"
+        },
+        {
+          "command": "ssh-explorer.connectNewWindow",
+          "when": "view == ssh-explorer-hosts && viewItem =~ /host/",
+          "group": "1_connect@2"
+        },
+        {
+          "command": "ssh-explorer.sendPublicKey",
+          "when": "view == ssh-explorer-hosts && viewItem =~ /host/",
+          "group": "2_actions@1"
+        },
+        {
+          "command": "ssh-explorer.removeHost",
+          "when": "view == ssh-explorer-hosts && viewItem =~ /host/",
+          "group": "3_remove@1"
+        },
+
+        {
           "command": "ssh-explorer.connectFolderCurrentWindow",
           "when": "view == ssh-explorer-hosts && viewItem =~ /folder/",
           "group": "inline"
@@ -232,6 +266,21 @@
           "command": "ssh-explorer.connectFolderNewWindow",
           "when": "view == ssh-explorer-hosts && viewItem =~ /folder/",
           "group": "inline"
+        },
+        {
+          "command": "ssh-explorer.connectFolderCurrentWindow",
+          "when": "view == ssh-explorer-hosts && viewItem =~ /folder/",
+          "group": "1_connect@1"
+        },
+        {
+          "command": "ssh-explorer.connectFolderNewWindow",
+          "when": "view == ssh-explorer-hosts && viewItem =~ /folder/",
+          "group": "1_connect@2"
+        },
+        {
+          "command": "ssh-explorer.removeRecentFolder",
+          "when": "view == ssh-explorer-hosts && viewItem =~ /folder/",
+          "group": "3_remove@1"
         }
       ]
     },

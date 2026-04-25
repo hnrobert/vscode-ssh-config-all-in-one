@@ -21,6 +21,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   refresh(): void {
     this.configFilesCache = []
     this.hostsCache.clear()
+    this.excludedFolders.clear()
     this.currentHostCache = undefined
     this._onDidChangeTreeData.fire()
   }
@@ -125,6 +126,8 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
     return hosts
   }
 
+  private excludedFolders: Set<string> = new Set()
+
   findHostItem(hostName: string): SSHHostItem | undefined {
     for (const hosts of this.hostsCache.values()) {
       const found = hosts.find(h => h.hostName === hostName)
@@ -132,6 +135,21 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         return found
     }
     return undefined
+  }
+
+  removeRecentFolder(hostName: string, folder: string): void {
+    this.excludedFolders.add(`${hostName}:${folder}`)
+    // Remove from in-memory cache
+    const folders = this.recentFolders.get(hostName)
+    if (folders) {
+      const idx = folders.indexOf(folder)
+      if (idx >= 0)
+        folders.splice(idx, 1)
+      if (folders.length === 0)
+        this.recentFolders.delete(hostName)
+    }
+    this.hostsCache.clear()
+    this._onDidChangeTreeData.fire()
   }
 
   getTreeItem(element: TreeItem): TreeItem {

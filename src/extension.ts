@@ -1,5 +1,5 @@
 import type { Disposable, ExtensionContext } from 'vscode'
-import { commands, Position, SnippetString, Uri, window, workspace } from 'vscode'
+import { commands, Position, Range, SnippetString, Uri, window, workspace } from 'vscode'
 import { copyPublicKey, openUserConfig } from './functions'
 import {
   connectFolder,
@@ -336,6 +336,62 @@ export function activate(context: ExtensionContext) {
       'ssh-explorer.openHostInConfig',
       (item: { configFile: string, lineNumber?: number }) => {
         openConfigFile(item.configFile, item.lineNumber)
+      },
+    ),
+  )
+
+  // Send public key to host
+  disposable.push(
+    commands.registerCommand(
+      'ssh-explorer.sendPublicKey',
+      (item: { hostName: string }) => {
+        copyPublicKey(item.hostName)
+      },
+    ),
+  )
+
+  // Remove host from config file
+  disposable.push(
+    commands.registerCommand(
+      'ssh-explorer.removeHost',
+      async (item: { hostName: string, configFile: string, lineNumber?: number }) => {
+        const confirm = await window.showWarningMessage(
+          `Remove host "${item.hostName}"?`,
+          { modal: true },
+          'Remove',
+        )
+        if (confirm !== 'Remove')
+          return
+
+        const doc = await workspace.openTextDocument(Uri.file(item.configFile))
+        const editor = await window.showTextDocument(doc)
+
+        // Find the Host block boundaries
+        const startLine = (item.lineNumber ?? 1) - 1
+        let endLine = startLine + 1
+        while (endLine < doc.lineCount) {
+          const trimmed = doc.lineAt(endLine).text.trim()
+          if (trimmed === '' || trimmed.startsWith('Host ') || trimmed.startsWith('Match '))
+            break
+          endLine++
+        }
+
+        // Remove lines from startLine to endLine-1 (inclusive)
+        const range = new Range(startLine, 0, endLine, 0)
+        await editor.edit(builder => builder.delete(range))
+        await doc.save()
+
+        explorerProvider.refresh()
+      },
+    ),
+  )
+
+  // Remove folder from recent list
+  disposable.push(
+    commands.registerCommand(
+      'ssh-explorer.removeRecentFolder',
+      async (item: { hostName: string, folder: string }) => {
+        explorerProvider.removeRecentFolder(item.hostName, item.folder)
       },
     ),
   )
