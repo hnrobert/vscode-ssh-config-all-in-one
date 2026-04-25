@@ -1,5 +1,6 @@
 export { SSHCodeLensProvider } from './codelens'
 export { SSHCompletionItemsProvider } from './completion'
+export { connectFolder, connectHost, openConfigFile, SSHExplorerProvider } from './explorer'
 export { SSHFormatProvider } from './formatter'
 export { SSHHoverProvider } from './hover'
 export { SSHDocumentLinkProvider } from './link'
