@@ -82,7 +82,7 @@ export function activate(context: ExtensionContext) {
     }),
   )
 
-  // Track collapse/expand state
+  // Collapse/expand all
   disposable.push(
     commands.registerCommand('ssh-explorer.toggleCollapseAll', () => {
       explorerProvider.collapseAll()

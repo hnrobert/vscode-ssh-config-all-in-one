@@ -1,5 +1,5 @@
 import type { TreeDataProvider, TreeItem } from 'vscode'
-import { commands, EventEmitter, TreeItemCollapsibleState, Uri, window } from 'vscode'
+import { commands, EventEmitter, Uri, window } from 'vscode'
 import { SSHConfigFileItem } from '../models/SSHConfigFileItem'
 import { SSHFolderItem } from '../models/SSHFolderItem'
 import { SSHHostItem } from '../models/SSHHostItem'
@@ -14,38 +14,26 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   private configFilesCache: SSHConfigFileItem[] = []
   private hostsCache: Map<string, SSHHostItem[]> = new Map()
   private recentFolders: Map<string, string[]> = new Map()
-  private collapsedHosts: Set<string> = new Set()
-  private collapsedConfigFiles: Set<string> = new Set()
   private recentFoldersLoaded = false
   private currentHostCache: string | undefined
+  private allCollapsed = false
 
   refresh(): void {
     this.configFilesCache = []
     this.hostsCache.clear()
-    this.recentFolders.clear()
-    this.recentFoldersLoaded = false
     this.currentHostCache = undefined
     this._onDidChangeTreeData.fire()
   }
 
   collapseAll(): void {
-    // Mark all config files as collapsed
-    this.configFilesCache.forEach(file => this.collapsedConfigFiles.add(file.filePath))
-    // Mark all hosts as collapsed
-    this.hostsCache.forEach(hosts =>
-      hosts.forEach(host => this.collapsedHosts.add(host.hostName)),
-    )
-    // Clear caches to force recreation with new state
+    this.allCollapsed = true
     this.configFilesCache = []
     this.hostsCache.clear()
     this._onDidChangeTreeData.fire()
   }
 
   expandAll(): void {
-    // Clear all collapsed states
-    this.collapsedConfigFiles.clear()
-    this.collapsedHosts.clear()
-    // Clear caches to force recreation with new state
+    this.allCollapsed = false
     this.configFilesCache = []
     this.hostsCache.clear()
     this._onDidChangeTreeData.fire()
@@ -61,7 +49,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         file.path,
         file.label,
         file.hosts.length,
-        this.collapsedConfigFiles.has(file.path),
+        this.allCollapsed,
       ),
     )
 
@@ -115,7 +103,6 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         ? (e.host.toLowerCase() === currentHost.toLowerCase()
           || Boolean(e.hostname && e.hostname.toLowerCase() === currentHost.toLowerCase()))
         : false
-      const isCollapsed = this.collapsedHosts.has(e.host)
 
       return new SSHHostItem(
         e.host,
@@ -124,7 +111,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         e.lineNumber,
         hasRecent,
         isConnected,
-        isCollapsed,
+        this.allCollapsed,
       )
     })
 

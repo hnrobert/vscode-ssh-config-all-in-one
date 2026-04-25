@@ -12,6 +12,7 @@ export class SSHFolderItem extends TreeItem {
     const displayPath = replaceHomeDirectory(folder)
 
     super(folderName, TreeItemCollapsibleState.None)
+    this.id = `${hostName}:${folder}`
     this.contextValue = isConnected ? 'folder-connected' : 'folder'
 
     // Use green color for connected folder

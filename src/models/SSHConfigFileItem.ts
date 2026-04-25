@@ -19,6 +19,7 @@ export class SSHConfigFileItem extends TreeItem {
     }
 
     super(label, state)
+    this.id = isCollapsed ? `${filePath}::c` : filePath
     this.contextValue = 'config-file'
     this.iconPath = new ThemeIcon('file-code')
     this.tooltip = filePath
