@@ -187,7 +187,7 @@ export function activate(context: ExtensionContext) {
         if (!input)
           return
 
-        const { host, hostname } = parseSSHInput(input)
+        const parsed = parseSSHInput(input)
 
         const doc = await workspace.openTextDocument(Uri.file(item.filePath))
         const editor = await window.showTextDocument(doc)
@@ -197,7 +197,7 @@ export function activate(context: ExtensionContext) {
 
         const pos = new Position(doc.lineCount - 1, lastLine.text.length)
         await editor.insertSnippet(
-          new SnippetString(`${prefix}Host \${1:${host}}\n    HostName \${2:${hostname}}\n    User \${3}\n`),
+          new SnippetString(`${prefix}${parsed.toSnippetString()}`),
           pos,
         )
 
@@ -228,29 +228,109 @@ export function deactivate() {
   // noop
 }
 
-function parseSSHInput(input: string): { host: string, hostname: string } {
+interface ParsedSSH {
+  host: string
+  hostname: string
+  port?: string
+  user?: string
+  identityFile?: string
+  toSnippetString: () => string
+}
+
+function parseSSHInput(input: string): ParsedSSH {
   const trimmed = input.trim()
 
-  // ssh user@hostname
-  const sshMatch = /^ssh\s+([^@\s]+)@([^\s@]+)$/i.exec(trimmed)
-  if (sshMatch) {
-    const user = sshMatch[1]
-    const addr = sshMatch[2]
-    return { host: `${user}@${addr}`, hostname: addr }
+  let user = ''
+  let hostname = ''
+  let port = ''
+  let identityFile = ''
+  let isSSHCommand = false
+
+  // Split into tokens, handling ssh command prefix
+  const tokens = trimmed.split(/\s+/)
+  let i = 0
+
+  if (tokens[0].toLowerCase() === 'ssh') {
+    isSSHCommand = true
+    i = 1
   }
 
-  // ssh hostname
-  const sshHostMatch = /^ssh\s+([^\s@]+)$/i.exec(trimmed)
-  if (sshHostMatch) {
-    return { host: sshHostMatch[1], hostname: sshHostMatch[1] }
+  // Parse -flags first
+  let destination = ''
+  while (i < tokens.length) {
+    const token = tokens[i]
+    if (token === '-p' && tokens[i + 1]) {
+      port = tokens[++i]
+    }
+    else if (token === '-i' && tokens[i + 1]) {
+      identityFile = tokens[++i]
+    }
+    else if (token === '-l' && tokens[i + 1]) {
+      user = tokens[++i]
+    }
+    else if (token.startsWith('-')) {
+      // Skip unknown flag and its value
+      i++
+    }
+    else {
+      destination = token
+    }
+    i++
   }
 
-  // user@hostname
-  const atMatch = /^[^@\s]+@([^\s@]+)$/.exec(trimmed)
-  if (atMatch) {
-    return { host: trimmed, hostname: atMatch[1] }
+  // If no destination from tokens (plain input without ssh prefix)
+  if (!destination) {
+    destination = isSSHCommand ? '' : trimmed
   }
 
-  // plain hostname or alias
-  return { host: trimmed, hostname: trimmed }
+  // Parse destination: [user@]hostname[:port]
+  if (destination) {
+    const atIndex = destination.lastIndexOf('@')
+    if (atIndex > 0) {
+      user = user || destination.slice(0, atIndex)
+      destination = destination.slice(atIndex + 1)
+    }
+
+    // Check for :port suffix (port must be valid uint16)
+    const lastColon = destination.lastIndexOf(':')
+    if (lastColon > 0) {
+      const maybePort = destination.slice(lastColon + 1)
+      const portNum = Number.parseInt(maybePort, 10)
+      if (Number.isInteger(portNum) && portNum > 0 && portNum <= 65535 && String(portNum) === maybePort) {
+        port = port || maybePort
+        destination = destination.slice(0, lastColon)
+      }
+    }
+
+    hostname = destination
+  }
+
+  // Fallback: if nothing parsed, use raw input as host
+  if (!hostname) {
+    hostname = trimmed.replace(/^ssh\s+/i, '').trim()
+  }
+
+  const host = user ? `${user}@${hostname}` : hostname
+
+  return {
+    host,
+    hostname,
+    port: port || undefined,
+    user: user || undefined,
+    identityFile: identityFile || undefined,
+    toSnippetString() {
+      let snippet = `Host \${1:${host}}\n    HostName \${2:${hostname}}`
+      if (user)
+        snippet += `\n    User ${user}`
+      if (port)
+        snippet += `\n    Port ${port}`
+      if (identityFile)
+        snippet += `\n    IdentityFile ${identityFile}`
+      // Add User placeholder only if not already set from input
+      if (!user)
+        snippet += `\n    User \${3}`
+      snippet += '\n'
+      return snippet
+    },
+  }
 }
