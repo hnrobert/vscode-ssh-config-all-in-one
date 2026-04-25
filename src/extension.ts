@@ -21,7 +21,7 @@ export function activate(context: ExtensionContext) {
 
   // Tree view
   const explorerProvider = new SSHExplorerProvider()
-  const treeView = window.createTreeView('ssh-explorer-hosts', {
+  const treeView = window.createTreeView('vscode-ssh-config-all-in-one-hosts', {
     treeDataProvider: explorerProvider,
     showCollapseAll: false,
   })
@@ -37,20 +37,10 @@ export function activate(context: ExtensionContext) {
   disposable.push(
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.connectCurrentWindow',
-      (hostStr: string, configFile?: string) => {
-        if (configFile) {
-          workspace.getConfiguration('remote.SSH').update('configFile', configFile, true)
-        }
-        commands
-          .executeCommand('opensshremotes.openEmptyWindowInCurrentWindow', {
-            host: hostStr,
-          })
-          .then(undefined, () => {
-            commands.executeCommand('vscode.newWindow', {
-              remoteAuthority: `ssh-remote+${hostStr}`,
-              reuseWindow: true,
-            })
-          })
+      (hostOrItem: string | { hostName: string, configFile: string }, configFile?: string) => {
+        const hostName = typeof hostOrItem === 'string' ? hostOrItem : hostOrItem.hostName
+        const cfg = typeof hostOrItem === 'string' ? configFile : hostOrItem.configFile
+        connectHost(hostName, explorerProvider, true, cfg)
       },
     ),
   )
@@ -58,18 +48,10 @@ export function activate(context: ExtensionContext) {
   disposable.push(
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.connectNewWindow',
-      (hostStr: string, configFile?: string) => {
-        if (configFile) {
-          workspace.getConfiguration('remote.SSH').update('configFile', configFile, true)
-        }
-        commands
-          .executeCommand('opensshremotes.openEmptyWindow', { host: hostStr })
-          .then(undefined, () => {
-            commands.executeCommand('vscode.newWindow', {
-              remoteAuthority: `ssh-remote+${hostStr}`,
-              reuseWindow: false,
-            })
-          })
+      (hostOrItem: string | { hostName: string, configFile: string }, configFile?: string) => {
+        const hostName = typeof hostOrItem === 'string' ? hostOrItem : hostOrItem.hostName
+        const cfg = typeof hostOrItem === 'string' ? configFile : hostOrItem.configFile
+        connectHost(hostName, explorerProvider, false, cfg)
       },
     ),
   )
@@ -85,21 +67,21 @@ export function activate(context: ExtensionContext) {
 
   // Open extension settings
   disposable.push(
-    commands.registerCommand('ssh-explorer.openSettings', () => {
+    commands.registerCommand('vscode-ssh-config-all-in-one.openSettings', () => {
       commands.executeCommand('workbench.action.openSettings', 'sshConfigAllInOne')
     }),
   )
 
   // SSH Explorer commands
   disposable.push(
-    commands.registerCommand('ssh-explorer.refresh', () => {
+    commands.registerCommand('vscode-ssh-config-all-in-one.refresh', () => {
       explorerProvider.refresh()
     }),
   )
 
   // Search hosts with live filtering
   disposable.push(
-    commands.registerCommand('ssh-explorer.searchHosts', async () => {
+    commands.registerCommand('vscode-ssh-config-all-in-one.searchHosts', async () => {
       const allHosts = await parseSSHConfig()
 
       interface HostPickItem { label: string, description?: string, detail?: string, hostName: string, configFile?: string, lineNumber?: number }
@@ -162,7 +144,7 @@ export function activate(context: ExtensionContext) {
 
   // Add config file from file picker
   disposable.push(
-    commands.registerCommand('ssh-explorer.addConfigFile', async () => {
+    commands.registerCommand('vscode-ssh-config-all-in-one.addConfigFile', async () => {
       const result = await window.showOpenDialog({
         title: 'Select SSH Config File',
         canSelectFiles: true,
@@ -187,25 +169,25 @@ export function activate(context: ExtensionContext) {
 
   // Collapse/expand all
   disposable.push(
-    commands.registerCommand('ssh-explorer.toggleCollapseAll', () => {
+    commands.registerCommand('vscode-ssh-config-all-in-one.toggleCollapseAll', () => {
       explorerProvider.collapseAll()
-      commands.executeCommand('setContext', 'ssh-explorer.allCollapsed', true)
+      commands.executeCommand('setContext', 'vscode-ssh-config-all-in-one.allCollapsed', true)
     }),
   )
 
   disposable.push(
-    commands.registerCommand('ssh-explorer.toggleExpandAll', () => {
+    commands.registerCommand('vscode-ssh-config-all-in-one.toggleExpandAll', () => {
       explorerProvider.expandAll()
-      commands.executeCommand('setContext', 'ssh-explorer.allCollapsed', false)
+      commands.executeCommand('setContext', 'vscode-ssh-config-all-in-one.allCollapsed', false)
     }),
   )
 
   // Initialize context
-  commands.executeCommand('setContext', 'ssh-explorer.allCollapsed', false)
+  commands.executeCommand('setContext', 'vscode-ssh-config-all-in-one.allCollapsed', false)
 
   // Locate current remote host in explorer
   disposable.push(
-    commands.registerCommand('ssh-explorer.locateCurrentHost', async () => {
+    commands.registerCommand('vscode-ssh-config-all-in-one.locateCurrentHost', async () => {
       const hostName = await getCurrentSSHHost()
       if (!hostName)
         return
@@ -227,32 +209,14 @@ export function activate(context: ExtensionContext) {
   // Update hasRemote context when workspace changes
   const updateRemoteContext = async () => {
     const host = await getCurrentSSHHost()
-    commands.executeCommand('setContext', 'ssh-explorer.hasRemote', !!host)
+    commands.executeCommand('setContext', 'vscode-ssh-config-all-in-one.hasRemote', !!host)
   }
   updateRemoteContext()
   disposable.push(workspace.onDidChangeWorkspaceFolders(() => updateRemoteContext()))
 
   disposable.push(
     commands.registerCommand(
-      'ssh-explorer.connectCurrentWindow',
-      (item: { hostName: string, configFile: string }) => {
-        connectHost(item.hostName, explorerProvider, true, item.configFile)
-      },
-    ),
-  )
-
-  disposable.push(
-    commands.registerCommand(
-      'ssh-explorer.connectNewWindow',
-      (item: { hostName: string, configFile: string }) => {
-        connectHost(item.hostName, explorerProvider, false, item.configFile)
-      },
-    ),
-  )
-
-  disposable.push(
-    commands.registerCommand(
-      'ssh-explorer.connectFolderCurrentWindow',
+      'vscode-ssh-config-all-in-one.connectFolderCurrentWindow',
       (item: { hostName: string, folder: string, configFile?: string }) => {
         connectFolder(item.hostName, item.folder, explorerProvider, true, item.configFile)
       },
@@ -261,7 +225,7 @@ export function activate(context: ExtensionContext) {
 
   disposable.push(
     commands.registerCommand(
-      'ssh-explorer.connectFolderNewWindow',
+      'vscode-ssh-config-all-in-one.connectFolderNewWindow',
       (item: { hostName: string, folder: string, configFile?: string }) => {
         connectFolder(item.hostName, item.folder, explorerProvider, false, item.configFile)
       },
@@ -270,7 +234,7 @@ export function activate(context: ExtensionContext) {
 
   disposable.push(
     commands.registerCommand(
-      'ssh-explorer.revealHost',
+      'vscode-ssh-config-all-in-one.revealHost',
       async (hostName: string) => {
         try {
           // Ensure the Remote Explorer view is visible
@@ -300,7 +264,7 @@ export function activate(context: ExtensionContext) {
   // New commands for config file management
   disposable.push(
     commands.registerCommand(
-      'ssh-explorer.openConfigFile',
+      'vscode-ssh-config-all-in-one.openConfigFile',
       (item: { filePath: string }) => {
         openConfigFile(item.filePath)
       },
@@ -309,7 +273,7 @@ export function activate(context: ExtensionContext) {
 
   disposable.push(
     commands.registerCommand(
-      'ssh-explorer.addNewHost',
+      'vscode-ssh-config-all-in-one.addNewHost',
       async (item: { filePath: string }) => {
         const input = await window.showInputBox({
           prompt: 'Enter SSH connection command or host alias',
@@ -340,7 +304,7 @@ export function activate(context: ExtensionContext) {
 
   disposable.push(
     commands.registerCommand(
-      'ssh-explorer.openHostInConfig',
+      'vscode-ssh-config-all-in-one.openHostInConfig',
       (item: { configFile: string, lineNumber?: number }) => {
         openConfigFile(item.configFile, item.lineNumber)
       },
@@ -350,7 +314,7 @@ export function activate(context: ExtensionContext) {
   // Send public key to host
   disposable.push(
     commands.registerCommand(
-      'ssh-explorer.sendPublicKey',
+      'vscode-ssh-config-all-in-one.sendPublicKey',
       (item: { hostName: string }) => {
         copyPublicKey(item.hostName)
       },
@@ -360,7 +324,7 @@ export function activate(context: ExtensionContext) {
   // Remove host from config file
   disposable.push(
     commands.registerCommand(
-      'ssh-explorer.removeHost',
+      'vscode-ssh-config-all-in-one.removeHost',
       async (item: { hostName: string, configFile: string, lineNumber?: number }) => {
         const confirm = await window.showWarningMessage(
           `Remove host "${item.hostName}"?`,
@@ -396,7 +360,7 @@ export function activate(context: ExtensionContext) {
   // Remove folder from recent list
   disposable.push(
     commands.registerCommand(
-      'ssh-explorer.removeRecentFolder',
+      'vscode-ssh-config-all-in-one.removeRecentFolder',
       async (item: { hostName: string, folder: string }) => {
         explorerProvider.removeRecentFolder(item.hostName, item.folder)
       },
@@ -406,7 +370,7 @@ export function activate(context: ExtensionContext) {
   // Test SSH connection
   disposable.push(
     commands.registerCommand(
-      'ssh-explorer.testConnection',
+      'vscode-ssh-config-all-in-one.testConnection',
       async (hostNameOrItem: string | { hostName: string }) => {
         const hostName = typeof hostNameOrItem === 'string' ? hostNameOrItem : hostNameOrItem.hostName
         if (!hostName)
@@ -433,7 +397,7 @@ export function activate(context: ExtensionContext) {
   // Ignore auto-discovered config file (add to exclude list)
   disposable.push(
     commands.registerCommand(
-      'ssh-explorer.ignoreConfigFile',
+      'vscode-ssh-config-all-in-one.ignoreConfigFile',
       async (item: { filePath: string }) => {
         const cfg = workspace.getConfiguration('sshConfigAllInOne.config')
         const current = cfg.get<string[]>('excludeDefaultFiles', [])
@@ -448,7 +412,7 @@ export function activate(context: ExtensionContext) {
   // Remove manually added config file from list
   disposable.push(
     commands.registerCommand(
-      'ssh-explorer.removeConfigFile',
+      'vscode-ssh-config-all-in-one.removeConfigFile',
       async (item: { filePath: string }) => {
         const cfg = workspace.getConfiguration('sshConfigAllInOne.config')
         const current = cfg.get<string[]>('additionalFiles', [])

@@ -59,7 +59,7 @@ export class SSHCodeLensProvider implements CodeLensProvider {
             new CodeLens(range, {
               title: 'Test Connection...',
               tooltip: `Test SSH connection to ${hostName}`,
-              command: 'ssh-explorer.testConnection',
+              command: 'vscode-ssh-config-all-in-one.testConnection',
               arguments: [hostName],
             }),
           )
@@ -94,8 +94,8 @@ export class SSHCodeLensProvider implements CodeLensProvider {
           codeLenses.push(
             new CodeLens(blockEndRange, {
               title: 'Show in Explorer',
-              tooltip: `Show ${hostName} in SSH Explorer`,
-              command: 'ssh-explorer.revealHost',
+              tooltip: `Show ${hostName} in SSH Config All In One`,
+              command: 'vscode-ssh-config-all-in-one.revealHost',
               arguments: [hostName],
             }),
           )
