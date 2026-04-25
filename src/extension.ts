@@ -396,6 +396,33 @@ export function activate(context: ExtensionContext) {
     ),
   )
 
+  // Test SSH connection
+  disposable.push(
+    commands.registerCommand(
+      'ssh-explorer.testConnection',
+      async (hostNameOrItem: string | { hostName: string }) => {
+        const hostName = typeof hostNameOrItem === 'string' ? hostNameOrItem : hostNameOrItem.hostName
+        if (!hostName)
+          return
+
+        const result = await window.withProgress(
+          { location: 15, title: `Testing connection to ${hostName}...` },
+          () => testSSHConnection(hostName),
+        )
+
+        if (result === 'success') {
+          window.showInformationMessage(`Connection to ${hostName} succeeded.`)
+        }
+        else if (result === 'timeout') {
+          window.showWarningMessage(`Connection to ${hostName} timed out after 5s.`)
+        }
+        else {
+          window.showErrorMessage(`Connection to ${hostName} failed: ${result}`)
+        }
+      },
+    ),
+  )
+
   new SSHCompletionItemsProvider(disposable)
   new SSHHoverProvider(disposable)
   new SSHDocumentLinkProvider(disposable)
@@ -514,4 +541,45 @@ function parseSSHInput(input: string): ParsedSSH {
       return snippet
     },
   }
+}
+
+async function testSSHConnection(hostName: string): Promise<string> {
+  const { exec } = await import('node:child_process')
+
+  const timeoutMs = 5000
+
+  return new Promise<string>((resolve) => {
+    const timer = setTimeout(() => {
+      child.kill()
+      resolve('timeout')
+    }, timeoutMs)
+
+    let child: import('node:child_process').ChildProcess
+    try {
+      child = exec(
+        `ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no "${hostName}" exit 0`,
+        { timeout: timeoutMs },
+        (error, _stdout, _stderr) => {
+          clearTimeout(timer)
+          if (!error) {
+            resolve('success')
+          }
+          else if (error.killed) {
+            resolve('timeout')
+          }
+          else if (typeof error.code === 'number' && error.code !== 255) {
+            resolve('success')
+          }
+          else {
+            const lines = error.message.split('\n').filter(l => !l.includes('WARNING:'))
+            resolve(lines[0]?.trim() || 'connection refused')
+          }
+        },
+      )
+    }
+    catch {
+      clearTimeout(timer)
+      resolve('failed to spawn ssh')
+    }
+  })
 }

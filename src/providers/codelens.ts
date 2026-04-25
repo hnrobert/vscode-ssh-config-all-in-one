@@ -57,6 +57,15 @@ export class SSHCodeLensProvider implements CodeLensProvider {
 
           codeLenses.push(
             new CodeLens(range, {
+              title: 'Test Connection...',
+              tooltip: `Test SSH connection to ${hostName}`,
+              command: 'ssh-explorer.testConnection',
+              arguments: [hostName],
+            }),
+          )
+
+          codeLenses.push(
+            new CodeLens(range, {
               title: 'Connect in Current Window...',
               tooltip: `Connect to ${hostName} in the current window`,
               command: 'vscode-ssh-config-all-in-one.connectCurrentWindow',
