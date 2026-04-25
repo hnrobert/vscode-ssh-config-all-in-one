@@ -2,7 +2,7 @@
   "name": "vscode-ssh-config-all-in-one",
   "displayName": "SSH Config All In One",
   "description": "Enhanced SSH config editing, providing autocompletion, formatting, hover support, and Quick Connect actions to ms-vscode-remote.remote-ssh.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "hnrobert",
   "icon": "docs/images/icon.png",
   "license": "Apache-2.0",
@@ -252,7 +252,6 @@
           "when": "view == vscode-ssh-config-all-in-one-hosts && viewItem == config-file-custom",
           "group": "3_remove@1"
         },
-
         {
           "command": "vscode-ssh-config-all-in-one.openHostInConfig",
           "when": "view == vscode-ssh-config-all-in-one-hosts && viewItem =~ /host/",
@@ -293,7 +292,6 @@
           "when": "view == vscode-ssh-config-all-in-one-hosts && viewItem =~ /host/",
           "group": "3_remove@1"
         },
-
         {
           "command": "vscode-ssh-config-all-in-one.connectFolderCurrentWindow",
           "when": "view == vscode-ssh-config-all-in-one-hosts && viewItem =~ /folder/",
