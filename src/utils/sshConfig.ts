@@ -22,23 +22,25 @@ export interface SSHConfigFile {
 export async function getSSHConfigFiles(): Promise<SSHConfigFile[]> {
   const configFiles: SSHConfigFile[] = []
 
+  // Load configs in parallel for better performance
+  const [userHosts, systemHosts] = await Promise.all([
+    parseSSHConfigFile(join(homedir(), '.ssh', 'config')),
+    parseSSHConfigFile('/etc/ssh/ssh_config'),
+  ])
+
   // User config
-  const userConfigPath = join(homedir(), '.ssh', 'config')
-  const userHosts = await parseSSHConfigFile(userConfigPath)
   if (userHosts.length > 0) {
     configFiles.push({
-      path: userConfigPath,
+      path: join(homedir(), '.ssh', 'config'),
       label: 'User Config (~/.ssh/config)',
       hosts: userHosts,
     })
   }
 
   // System config (if accessible)
-  const systemConfigPath = '/etc/ssh/ssh_config'
-  const systemHosts = await parseSSHConfigFile(systemConfigPath)
   if (systemHosts.length > 0) {
     configFiles.push({
-      path: systemConfigPath,
+      path: '/etc/ssh/ssh_config',
       label: 'System Config (/etc/ssh/ssh_config)',
       hosts: systemHosts,
     })
@@ -47,13 +49,16 @@ export async function getSSHConfigFiles(): Promise<SSHConfigFile[]> {
   // Remote config (if in remote session)
   if (env.remoteName === 'ssh-remote') {
     const remoteConfigPath = join(homedir(), '.ssh', 'config')
-    const remoteHosts = await parseSSHConfigFile(remoteConfigPath)
-    if (remoteHosts.length > 0 && remoteConfigPath !== userConfigPath) {
-      configFiles.push({
-        path: remoteConfigPath,
-        label: 'Remote Config (Remote ~/.ssh/config)',
-        hosts: remoteHosts,
-      })
+    const userConfigPath = join(homedir(), '.ssh', 'config')
+    if (remoteConfigPath !== userConfigPath) {
+      const remoteHosts = await parseSSHConfigFile(remoteConfigPath)
+      if (remoteHosts.length > 0) {
+        configFiles.push({
+          path: remoteConfigPath,
+          label: 'Remote Config (Remote ~/.ssh/config)',
+          hosts: remoteHosts,
+        })
+      }
     }
   }
 

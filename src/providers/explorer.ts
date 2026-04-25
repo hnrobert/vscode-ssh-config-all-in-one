@@ -15,11 +15,15 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   private hostsCache: Map<string, SSHHostItem[]> = new Map()
   private recentFolders: Map<string, string[]> = new Map()
   private collapsedHosts: Set<string> = new Set()
+  private recentFoldersLoaded = false
+  private currentHostCache: string | undefined
 
   refresh(): void {
     this.configFilesCache = []
     this.hostsCache.clear()
     this.recentFolders.clear()
+    this.recentFoldersLoaded = false
+    this.currentHostCache = undefined
     this._onDidChangeTreeData.fire()
   }
 
@@ -36,22 +40,57 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   }
 
   async getConfigFiles(): Promise<SSHConfigFileItem[]> {
+    if (this.configFilesCache.length > 0)
+      return this.configFilesCache
+
     const configFiles = await getSSHConfigFiles()
     this.configFilesCache = configFiles.map(file =>
       new SSHConfigFileItem(file.path, file.label, file.hosts.length),
     )
+
+    // Start loading current host in background
+    this.loadCurrentHostInBackground()
+
     return this.configFilesCache
   }
 
+  private async loadCurrentHostInBackground(): Promise<void> {
+    if (!this.currentHostCache) {
+      this.currentHostCache = await getCurrentSSHHost()
+      // Refresh hosts to update connection status
+      if (this.currentHostCache && this.hostsCache.size > 0) {
+        this._onDidChangeTreeData.fire()
+      }
+    }
+  }
+
+  private async loadRecentFoldersInBackground(): Promise<void> {
+    if (!this.recentFoldersLoaded) {
+      this.recentFolders = await getRecentSSHConnections()
+      this.recentFoldersLoaded = true
+      // Refresh hosts to update folder indicators
+      if (this.hostsCache.size > 0) {
+        this._onDidChangeTreeData.fire()
+      }
+    }
+  }
+
   async getHostsForConfig(configFile: SSHConfigFileItem): Promise<SSHHostItem[]> {
+    // Return cached if available
+    if (this.hostsCache.has(configFile.filePath))
+      return this.hostsCache.get(configFile.filePath)!
+
     const configFiles = await getSSHConfigFiles()
     const config = configFiles.find(f => f.path === configFile.filePath)
     if (!config)
       return []
 
-    const currentHost = await getCurrentSSHHost()
-    this.recentFolders = await getRecentSSHConnections()
+    // Get current host (use cache if available)
+    const currentHost = this.currentHostCache || await getCurrentSSHHost()
+    if (!this.currentHostCache)
+      this.currentHostCache = currentHost
 
+    // Create hosts without waiting for recent folders
     const hosts = config.hosts.map((e) => {
       const hasRecent = this.recentFolders.has(e.host) || this.recentFolders.has(e.hostname || '')
       const isConnected = currentHost
@@ -72,6 +111,12 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
     })
 
     this.hostsCache.set(configFile.filePath, hosts)
+
+    // Load recent folders in background
+    if (!this.recentFoldersLoaded) {
+      this.loadRecentFoldersInBackground()
+    }
+
     return hosts
   }
 
@@ -110,6 +155,11 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
       return this.getHostsForConfig(element)
 
     if (element instanceof SSHHostItem) {
+      // Ensure recent folders are loaded
+      if (!this.recentFoldersLoaded) {
+        await this.loadRecentFoldersInBackground()
+      }
+
       const folders = this.recentFolders.get(element.hostName)
         || this.recentFolders.get(element.description || '')
         || []
@@ -117,7 +167,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
       if (folders.length === 0)
         return []
 
-      const currentHost = await getCurrentSSHHost()
+      const currentHost = this.currentHostCache || await getCurrentSSHHost()
       const currentFolder = getCurrentSSHFolder()
       const isThisHostConnected = element.hostName === currentHost || element.description === currentHost
 
