@@ -149,6 +149,11 @@
         "icon": "$(gear)"
       },
       {
+        "command": "ssh-explorer.searchHosts",
+        "title": "Search Hosts",
+        "icon": "$(search)"
+      },
+      {
         "command": "ssh-explorer.addConfigFile",
         "title": "Add Config File",
         "icon": "$(add)"
@@ -162,29 +167,34 @@
     "menus": {
       "view/title": [
         {
-          "command": "ssh-explorer.addConfigFile",
+          "command": "ssh-explorer.searchHosts",
           "when": "view == ssh-explorer-hosts",
           "group": "navigation@1"
         },
         {
+          "command": "ssh-explorer.addConfigFile",
+          "when": "view == ssh-explorer-hosts",
+          "group": "navigation@2"
+        },
+        {
           "command": "ssh-explorer.locateCurrentHost",
           "when": "view == ssh-explorer-hosts && ssh-explorer.hasRemote",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "ssh-explorer.refresh",
           "when": "view == ssh-explorer-hosts",
-          "group": "navigation@3"
+          "group": "navigation@4"
         },
         {
           "command": "ssh-explorer.toggleCollapseAll",
           "when": "view == ssh-explorer-hosts && !ssh-explorer.allCollapsed",
-          "group": "navigation@4"
+          "group": "navigation@5"
         },
         {
           "command": "ssh-explorer.toggleExpandAll",
           "when": "view == ssh-explorer-hosts && ssh-explorer.allCollapsed",
-          "group": "navigation@4"
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [

@@ -12,6 +12,7 @@ import {
   SSHFormatProvider,
   SSHHoverProvider,
 } from './providers'
+import { parseSSHConfig } from './utils/sshConfig'
 import { getCurrentSSHHost } from './utils/sshDetection'
 
 export function activate(context: ExtensionContext) {
@@ -86,6 +87,69 @@ export function activate(context: ExtensionContext) {
   disposable.push(
     commands.registerCommand('ssh-explorer.refresh', () => {
       explorerProvider.refresh()
+    }),
+  )
+
+  // Search hosts with live filtering
+  disposable.push(
+    commands.registerCommand('ssh-explorer.searchHosts', async () => {
+      const allHosts = await parseSSHConfig()
+
+      interface HostPickItem { label: string, description?: string, detail?: string, hostName: string, configFile?: string, lineNumber?: number }
+      const toItem = (h: typeof allHosts[number]): HostPickItem => ({
+        label: h.host,
+        description: h.hostname,
+        detail: h.configFile,
+        hostName: h.host,
+        configFile: h.configFile,
+        lineNumber: h.lineNumber,
+      })
+
+      const allItems: HostPickItem[] = allHosts.map(toItem)
+
+      const quickPick = window.createQuickPick<HostPickItem>()
+      quickPick.placeholder = 'Search SSH hosts...'
+      quickPick.matchOnDescription = true
+      quickPick.matchOnDetail = true
+      quickPick.items = allItems.slice(0, 10)
+
+      quickPick.onDidChangeValue((value) => {
+        if (!value) {
+          quickPick.items = allItems.slice(0, 10)
+          return
+        }
+        const lower = value.toLowerCase()
+        const scored = allItems
+          .map((item) => {
+            const hostMatch = item.hostName.toLowerCase().includes(lower) ? 2 : 0
+            const descMatch = (item.description ?? '').toLowerCase().includes(lower) ? 1 : 0
+            return { item, score: hostMatch + descMatch }
+          })
+          .filter(s => s.score > 0)
+          .sort((a, b) => b.score - a.score)
+        quickPick.items = scored.slice(0, 10).map(s => s.item)
+      })
+
+      quickPick.onDidAccept(async () => {
+        const selected = quickPick.selectedItems[0]
+        quickPick.hide()
+
+        if (!selected)
+          return
+
+        // Ensure explorer is loaded and reveal the host
+        await commands.executeCommand('workbench.view.remote')
+        await explorerProvider.getConfigFiles()
+        const item = explorerProvider.findHostItem(selected.hostName)
+        if (item) {
+          await treeView.reveal(item, { expand: true, focus: true, select: true })
+        }
+        else if (selected.configFile && selected.lineNumber) {
+          await openConfigFile(selected.configFile, selected.lineNumber)
+        }
+      })
+
+      quickPick.show()
     }),
   )
 
