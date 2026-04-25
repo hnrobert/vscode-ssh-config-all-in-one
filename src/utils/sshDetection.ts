@@ -71,19 +71,3 @@ export function getCurrentSSHFolder(): string | undefined {
   // // console.log(`[getCurrentSSHFolder] Current folder path: "${folderPath}"`)
   return folderPath
 }
-
-export async function getAllSSHHosts(): Promise<string[]> {
-  if (env.remoteName !== 'ssh-remote')
-    return []
-
-  const hosts: string[] = []
-  for (const folder of workspace.workspaceFolders ?? []) {
-    const authority = folder.uri.authority
-    if (authority.startsWith('ssh-remote+')) {
-      const hostname = authority.substring('ssh-remote+'.length)
-      hosts.push(await decodeSSHHostname(hostname))
-    }
-  }
-  // Deduplicate while preserving order
-  return [...new Set(hosts)]
-}
