@@ -26,9 +26,6 @@
     "vscode ssh"
   ],
   "main": "./out/extension.js",
-  "enabledApiProposals": [
-    "contribViewsRemote"
-  ],
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": true
@@ -80,12 +77,21 @@
         }
       }
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ssh-config-all-in-one",
+          "title": "SSH Config All In One",
+          "icon": "docs/images/icon-stroke.svg"
+        }
+      ]
+    },
     "views": {
-      "remote": [
+      "ssh-config-all-in-one": [
         {
           "id": "vscode-ssh-config-all-in-one-hosts",
           "name": "SSH Config All In One",
-          "group": "targets@2"
+          "icon": "docs/images/icon-stroke.svg"
         }
       ]
     },
