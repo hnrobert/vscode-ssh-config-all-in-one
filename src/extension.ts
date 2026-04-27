@@ -127,7 +127,7 @@ export function activate(context: ExtensionContext) {
           return
 
         // Ensure explorer is loaded and reveal the host
-        await commands.executeCommand('workbench.view.remote')
+        // await commands.executeCommand('vscode-ssh-config-all-in-one-hosts.focus')
         await explorerProvider.getConfigFiles()
         const item = explorerProvider.findHostItem(selected.hostName)
         if (item) {
@@ -192,7 +192,7 @@ export function activate(context: ExtensionContext) {
       if (!hostName)
         return
 
-      await commands.executeCommand('workbench.view.remote')
+      // await commands.executeCommand('vscode-ssh-config-all-in-one-hosts.focus')
       await explorerProvider.getConfigFiles()
 
       const item = explorerProvider.findHostItem(hostName)
@@ -238,7 +238,7 @@ export function activate(context: ExtensionContext) {
       async (hostName: string) => {
         try {
           // Ensure the Remote Explorer view is visible
-          await commands.executeCommand('workbench.view.remote')
+          // await commands.executeCommand('vscode-ssh-config-all-in-one-hosts.focus')
 
           // Refresh and find host
           const item = explorerProvider.findHostItem(hostName)
