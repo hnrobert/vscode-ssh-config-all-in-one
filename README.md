@@ -10,6 +10,7 @@
 
 ## Features
 
+- **SSH Host Explorer**: A dedicated activity bar panel that lists all your SSH hosts organized by config file, with inline actions to connect, edit, search, and manage hosts.
 - **Quick Connect CodeLens**: Provides "Connect in Current Window..." and "Connect in New Window..." inline buttons above each `Host` declaration. Seamlessly connects to the server using the official `ms-vscode-remote.remote-ssh` extension.
   - ![demo of quick connect code lens](docs/images/demo-codelens-quick-connection.png)
 - **Universal Formatter**: Formats your SSH config regardless of where it's opened (local, remote workspace, or even unsaved untitled files).
@@ -44,6 +45,8 @@ Host example
 ## Settings
 
 - `sshConfigAllInOne.format.indentSize`: The number of spaces used for indentation when formatting `Host` and `Match` blocks. (Default: `2`)
+- `sshConfigAllInOne.config.additionalFiles`: Additional SSH config file paths to show in the explorer. Supports `~` for home directory.
+- `sshConfigAllInOne.config.excludeDefaultFiles`: Default SSH config file paths to exclude from the explorer.
 
 ## Acknowledgements
 
