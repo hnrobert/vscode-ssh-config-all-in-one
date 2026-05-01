@@ -74,6 +74,12 @@
           "default": [],
           "order": 3,
           "markdownDescription": "Default SSH config file paths to exclude from the explorer. Supports `~` for home directory. Example: `~/.ssh/config` or `/etc/ssh/ssh_config`"
+        },
+        "sshConfigAllInOne.detection.enabled": {
+          "type": "boolean",
+          "default": true,
+          "order": 4,
+          "markdownDescription": "Automatically detect files as SSH Config when the filename contains \"config\" and the content matches SSH Config patterns"
         }
       }
     },

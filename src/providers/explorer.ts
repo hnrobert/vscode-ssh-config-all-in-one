@@ -1,5 +1,5 @@
 import type { TreeDataProvider, TreeItem } from 'vscode'
-import { commands, EventEmitter, Uri, window, workspace } from 'vscode'
+import { commands, EventEmitter, languages, Uri, window, workspace } from 'vscode'
 import { SSHConfigFileItem } from '../models/SSHConfigFileItem'
 import { SSHFolderItem } from '../models/SSHFolderItem'
 import { SSHHostItem } from '../models/SSHHostItem'
@@ -298,12 +298,35 @@ export async function connectFolder(
 export async function openConfigFile(filePath: string, lineNumber?: number): Promise<void> {
   try {
     const uri = Uri.file(filePath)
-    const document = await window.showTextDocument(uri)
+    const editor = await window.showTextDocument(uri)
+    const doc = editor.document
+
+    if (doc.languageId === 'plaintext') {
+      const text = doc.getText()
+      const BLOCK_RE = /^\s*(Host|Match)\s+\S/
+      const KEYWORD_RE = /^\s+(HostName|User|Port|IdentityFile|ProxyCommand|ProxyJump|ForwardAgent|StrictHostKeyChecking|AddKeysToAgent|UseKeychain|ServerAliveInterval|ServerAliveCountMax|ConnectTimeout|Compression|LogLevel|Include)\b/i
+      let hasBlock = false
+      let hasKeyword = false
+      for (const line of text.split('\n').slice(0, 100)) {
+        if (BLOCK_RE.test(line))
+          hasBlock = true
+        if (KEYWORD_RE.test(line))
+          hasKeyword = true
+        if (hasBlock && hasKeyword)
+          break
+      }
+      if (hasBlock && hasKeyword) {
+        try {
+          await languages.setTextDocumentLanguage(doc, 'ssh_config')
+        }
+        catch {}
+      }
+    }
 
     if (lineNumber && lineNumber > 0) {
-      const position = document.document.lineAt(lineNumber - 1).range.start
-      document.selection = new (await import('vscode')).Selection(position, position)
-      document.revealRange(document.document.lineAt(lineNumber - 1).range)
+      const position = doc.lineAt(lineNumber - 1).range.start
+      editor.selection = new (await import('vscode')).Selection(position, position)
+      editor.revealRange(doc.lineAt(lineNumber - 1).range)
     }
   }
   catch (error) {

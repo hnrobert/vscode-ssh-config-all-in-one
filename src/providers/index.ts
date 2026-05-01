@@ -4,3 +4,4 @@ export { connectFolder, connectHost, openConfigFile, SSHExplorerProvider } from 
 export { SSHFormatProvider } from './formatter'
 export { SSHHoverProvider } from './hover'
 export { SSHDocumentLinkProvider } from './link'
+export { registerSSHConfigDetection } from './sshConfigDetection'
