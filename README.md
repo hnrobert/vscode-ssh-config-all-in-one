@@ -6,6 +6,8 @@
 [![Open Issues](https://flat.badgen.net/github/open-issues/hnrobert/vscode-ssh-config-all-in-one?icon=github)](https://github.com/hnrobert/vscode-ssh-config-all-in-one/issues)
 [![Closed Issues](https://flat.badgen.net/github/closed-issues/hnrobert/vscode-ssh-config-all-in-one?icon=github)](https://github.com/hnrobert/vscode-ssh-config-all-in-one/issues?q=is%3Aissue+is%3Aclosed)
 
+<p align="center"><img src="docs/images/icon.png" alt="logo" width="128" /></p>
+
 > Enhanced SSH Config Language Server extension for Visual Studio Code. Provides autocompletion, syntax highlighting, formatting, go to include file definitions, hover support, and quick connection actions for SSH config directives.
 
 ![demo overall](https://github.com/user-attachments/assets/c6034a36-3c74-423f-896e-0277987f1973)
