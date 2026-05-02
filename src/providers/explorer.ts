@@ -82,10 +82,10 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         const items = [...this.recentFolders.entries()]
           .map(([host, folders]) => `  ${host}: ${folders.join(', ')}`)
           .join('\n')
-        console.log(`[SSH Config] Recent folders loaded:\n${items}`)
+        // console.log(`[SSH Config] Recent folders loaded:\n${items}`)
       }
       else {
-        console.log('[SSH Config] No recent SSH folders found')
+        // console.log('[SSH Config] No recent SSH folders found')
       }
       // Clear hosts cache to force recreation with folder info
       this.hostsCache.clear()

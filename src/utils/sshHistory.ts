@@ -6,9 +6,9 @@ import { env, window } from 'vscode'
 import { decodeSSHHostname } from './sshDetection'
 
 function log(msg: string) {
-  window
-    .createOutputChannel('SSH Config All-In-One')
-    .appendLine(`[History] ${msg}`)
+  // window
+  //   .createOutputChannel('SSH Config All-In-One')
+  //   .appendLine(`[History] ${msg}`)
 }
 
 function getVSCodeStoragePath(): string {
@@ -147,6 +147,21 @@ async function getFromRecentlyOpened(
   return hostFolders
 }
 
+function mergeFolders(target: Map<string, string[]>, source: Map<string, string[]>): void {
+  for (const [host, folders] of source) {
+    if (!target.has(host)) {
+      target.set(host, [...folders])
+    }
+    else {
+      const existing = target.get(host)!
+      for (const f of folders) {
+        if (!existing.includes(f))
+          existing.push(f)
+      }
+    }
+  }
+}
+
 export async function getRecentSSHConnections(): Promise<
   Map<string, string[]>
 > {
@@ -156,32 +171,25 @@ export async function getRecentSSHConnections(): Promise<
   if (!db) return hostFolders
 
   try {
-    // Primary: Remote SSH extension's own folder history
-    const remoteSSHData = await getFromRemoteSSHStorage(db)
-    for (const [host, folders] of remoteSSHData)
-      hostFolders.set(host, [...folders])
+    // Run both sources concurrently, merge results
+    const [remoteSSHData, recentlyOpened] = await Promise.all([
+      getFromRemoteSSHStorage(db),
+      getFromRecentlyOpened(db),
+    ])
 
-    // Secondary: VS Code's recently opened paths
-    const recentlyOpened = await getFromRecentlyOpened(db)
-    for (const [host, folders] of recentlyOpened) {
-      if (!hostFolders.has(host)) {
-        hostFolders.set(host, [...folders])
-      } else {
-        const existing = hostFolders.get(host)!
-        for (const f of folders) {
-          if (!existing.includes(f)) existing.push(f)
-        }
-      }
-    }
+    mergeFolders(hostFolders, remoteSSHData)
+    mergeFolders(hostFolders, recentlyOpened)
 
     log(`Total: ${hostFolders.size} hosts with recent folders`)
     for (const [host, folders] of hostFolders.entries())
       log(`  ${host}: ${folders.length} folder(s)`)
-  } catch (error) {
+  }
+  catch (error) {
     log(
       `Failed to get recent SSH connections: ${error instanceof Error ? error.message : String(error)}`,
     )
-  } finally {
+  }
+  finally {
     db.close()
   }
 
