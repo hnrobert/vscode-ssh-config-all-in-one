@@ -9,7 +9,7 @@ const sqlJsDir = join(__dirname, 'sql.js')
 
 function loadSqlJs() {
   // eslint-disable-next-line ts/no-require-imports
-  const mod = require(sqlJsDir)
+  const mod = require(join(sqlJsDir, 'sql-wasm.js'))
   const init = mod.default || mod
   return init({ locateFile: (file: string) => join(sqlJsDir, file) })
 }
