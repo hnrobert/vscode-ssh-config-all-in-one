@@ -23,6 +23,8 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
     this.hostsCache.clear()
     this.excludedFolders.clear()
     this.currentHostCache = undefined
+    this.recentFoldersLoaded = false
+    this.recentFolders.clear()
     this._onDidChangeTreeData.fire()
   }
 
@@ -76,6 +78,15 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
     if (!this.recentFoldersLoaded) {
       this.recentFolders = await getRecentSSHConnections()
       this.recentFoldersLoaded = true
+      if (this.recentFolders.size > 0) {
+        const items = [...this.recentFolders.entries()]
+          .map(([host, folders]) => `  ${host}: ${folders.join(', ')}`)
+          .join('\n')
+        console.log(`[SSH Config] Recent folders loaded:\n${items}`)
+      }
+      else {
+        console.log('[SSH Config] No recent SSH folders found')
+      }
       // Clear hosts cache to force recreation with folder info
       this.hostsCache.clear()
       // Refresh to update folder indicators
