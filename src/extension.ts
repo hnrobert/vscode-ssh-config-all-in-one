@@ -119,7 +119,8 @@ export function activate(context: ExtensionContext) {
           })
           .filter(s => s.score > 0)
           .sort((a, b) => b.score - a.score)
-        quickPick.items = scored.slice(0, 10).map(s => s.item)
+        // quickPick.items = scored.slice(0, 10).map(s => s.item)
+        quickPick.items = scored.map(s => s.item)
       })
 
       quickPick.onDidAccept(async () => {

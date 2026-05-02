@@ -1,15 +1,24 @@
 import type SqlJs from 'sql.js'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { env } from 'vscode'
 import { decodeSSHHostname } from './sshDetection'
 
-const sqlJsDir = join(__dirname, 'sql.js')
+function getSqlJsPath(): string {
+  // Bundled location (published extension)
+  const bundled = join(__dirname, 'sql.js', 'sql-wasm.js')
+  if (existsSync(bundled))
+    return bundled
+  // node_modules (development)
+  return require.resolve('sql.js/dist/sql-wasm.js')
+}
 
 function loadSqlJs() {
+  const sqlJsPath = getSqlJsPath()
+  const sqlJsDir = dirname(sqlJsPath)
   // eslint-disable-next-line ts/no-require-imports
-  const mod = require(sqlJsDir)
+  const mod = require(sqlJsPath)
   const init = mod.default || mod
   return init({ locateFile: (file: string) => join(sqlJsDir, file) })
 }
