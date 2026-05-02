@@ -5,13 +5,13 @@ import {
   connectFolder,
   connectHost,
   openConfigFile,
+  registerSSHConfigDetection,
   SSHCodeLensProvider,
   SSHCompletionItemsProvider,
   SSHDocumentLinkProvider,
   SSHExplorerProvider,
   SSHFormatProvider,
   SSHHoverProvider,
-  registerSSHConfigDetection,
 } from './providers'
 import { parseSSHConfig } from './utils/sshConfig'
 import { getCurrentSSHHost } from './utils/sshDetection'
@@ -101,11 +101,13 @@ export function activate(context: ExtensionContext) {
       quickPick.placeholder = 'Search SSH hosts...'
       quickPick.matchOnDescription = true
       quickPick.matchOnDetail = true
-      quickPick.items = allItems.slice(0, 10)
+      quickPick.items = allItems
+      // quickPick.items = allItems.slice(0, 10)
 
       quickPick.onDidChangeValue((value) => {
         if (!value) {
-          quickPick.items = allItems.slice(0, 10)
+          quickPick.items = allItems
+          // quickPick.items = allItems.slice(0, 10)
           return
         }
         const lower = value.toLowerCase()
