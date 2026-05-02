@@ -63,14 +63,6 @@ function resolveIncludeBasePath(partial: string): { dir: string, prefix: string 
   return { dir, prefix }
 }
 
-function getPathInsertPrefix(partial: string): string {
-  if (partial.startsWith('~'))
-    return partial.endsWith('/') ? partial : `${dirname(partial)}/`
-  if (partial.startsWith('/'))
-    return partial.endsWith('/') ? partial : `${dirname(partial)}/`
-  return partial.endsWith('/') ? partial : (partial ? `${dirname(partial)}/` : '')
-}
-
 export class SSHCompletionItemsProvider implements CompletionItemProvider {
   constructor(disposables: Disposable[]) {
     disposables.push(languages.registerCompletionItemProvider(DOCUMENT_PROVIDER, this, ' ', '\n', '/', '~'))
@@ -121,7 +113,6 @@ export class SSHCompletionItemsProvider implements CompletionItemProvider {
 
   private providePathCompletions(partial: string): CompletionItem[] {
     const { dir, prefix } = resolveIncludeBasePath(partial)
-    const insertPrefix = getPathInsertPrefix(partial)
 
     if (!existsSync(dir))
       return []
@@ -150,18 +141,17 @@ export class SSHCompletionItemsProvider implements CompletionItemProvider {
         continue
       }
 
+      // / is a word boundary in VS Code, so insertText = just the entry name.
+      // VS Code replaces only the last path component automatically.
       if (isDir) {
         const item = new CompletionItem(entry, CompletionItemKind.Folder)
-        item.insertText = `${insertPrefix}${entry}/`
+        item.insertText = `${entry}/`
         item.sortText = `0-${entry}`
         items.push(item)
       }
       else {
-        // Only show relevant files (config-like)
-        const ext = entry.split('.').pop()?.toLowerCase() || ''
-        const isConfig = !entry.includes('.') || ['conf', 'config', 'ssh', 'ssh_config'].includes(ext)
-        const item = new CompletionItem(entry, isConfig ? CompletionItemKind.File : CompletionItemKind.File)
-        item.insertText = `${insertPrefix}${entry}`
+        const item = new CompletionItem(entry, CompletionItemKind.File)
+        item.insertText = entry
         item.sortText = `1-${entry}`
         items.push(item)
       }
