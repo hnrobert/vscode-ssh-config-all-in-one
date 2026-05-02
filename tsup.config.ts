@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsup';
+import { defineConfig } from 'tsup'
 
 export default defineConfig({
   entry: ['src/extension.ts'],
@@ -13,5 +13,5 @@ export default defineConfig({
   minify: false,
   shims: false,
   skipNodeModulesBundle: false,
-  external: ['vscode'],
-});
+  external: ['vscode', 'sql.js'],
+})

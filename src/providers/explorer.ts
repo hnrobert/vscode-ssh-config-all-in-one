@@ -314,8 +314,8 @@ export async function openConfigFile(filePath: string, lineNumber?: number): Pro
 
     if (doc.languageId === 'plaintext') {
       const text = doc.getText()
-      const BLOCK_RE = /^\s*(Host|Match)\s+\S/
-      const KEYWORD_RE = /^\s+(HostName|User|Port|IdentityFile|ProxyCommand|ProxyJump|ForwardAgent|StrictHostKeyChecking|AddKeysToAgent|UseKeychain|ServerAliveInterval|ServerAliveCountMax|ConnectTimeout|Compression|LogLevel|Include)\b/i
+      const BLOCK_RE = /^\s*(?:Host|Match)\s+\S/
+      const KEYWORD_RE = /^\s+(?:HostName|User|Port|IdentityFile|ProxyCommand|ProxyJump|ForwardAgent|StrictHostKeyChecking|AddKeysToAgent|UseKeychain|ServerAliveInterval|ServerAliveCountMax|ConnectTimeout|Compression|LogLevel|Include)\b/i
       let hasBlock = false
       let hasKeyword = false
       for (const line of text.split('\n').slice(0, 100)) {

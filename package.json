@@ -351,10 +351,14 @@
   "devDependencies": {
     "@antfu/eslint-config": "^8.2.0",
     "@types/node": "~20.11.25",
+    "@types/sql.js": "^1.4.11",
     "@types/vscode": "^1.83.0",
     "eslint": "^10.2.0",
     "jiti": "^2.6.1",
     "tsup": "^8.5.0",
     "typescript": "5.2.2"
+  },
+  "dependencies": {
+    "sql.js": "^1.14.1"
   }
 }
