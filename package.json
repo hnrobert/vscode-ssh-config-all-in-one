@@ -2,7 +2,7 @@
   "name": "vscode-ssh-config-all-in-one",
   "displayName": "SSH Config All In One",
   "description": "Enhanced SSH config editing, providing autocompletion, formatting, hover support, and Quick Connect actions to ms-vscode-remote.remote-ssh.",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "publisher": "hnrobert",
   "icon": "docs/images/icon.png",
   "license": "Apache-2.0",
