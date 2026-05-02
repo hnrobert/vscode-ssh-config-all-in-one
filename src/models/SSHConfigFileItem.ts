@@ -20,7 +20,7 @@ export class SSHConfigFileItem extends TreeItem {
     }
 
     super(label, state)
-    this.id = isCollapsed ? `${filePath}::c` : filePath
+    this.id = filePath
     this.contextValue = isCustom ? 'config-file-custom' : 'config-file'
     this.iconPath = new ThemeIcon('file-code')
     this.tooltip = filePath

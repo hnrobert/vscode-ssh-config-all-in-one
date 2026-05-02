@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { env, workspace } from 'vscode'
 
 export async function getCurrentSSHHost(): Promise<string | undefined> {
@@ -27,31 +28,16 @@ export async function getCurrentSSHHost(): Promise<string | undefined> {
   return undefined
 }
 
-export async function decodeSSHHostname(hostname: string): Promise<string> {
-  // console.log(`[decodeSSHHostname] Input: "${hostname}"`)
-
-  // Decode URL-encoded hostname
+export function decodeSSHHostname(hostname: string): string {
   hostname = decodeURIComponent(hostname)
-  // console.log(`[decodeSSHHostname] After URL decode: "${hostname}"`)
 
-  // If it's hex-encoded JSON, decode it
   if (/^[0-9a-f]+$/i.test(hostname)) {
-    // console.log(`[decodeSSHHostname] Detected hex-encoded JSON`)
     try {
-      const { Buffer } = await import('node:buffer')
       const decoded = Buffer.from(hostname, 'hex').toString('utf-8')
-      // console.log(`[decodeSSHHostname] Hex decoded to: "${decoded}"`)
       const hostData = JSON.parse(decoded)
-      // console.log(`[decodeSSHHostname] Parsed JSON:`, hostData)
       hostname = hostData.hostName || hostname
-      // console.log(`[decodeSSHHostname] Final hostname: "${hostname}"`)
     }
-    catch (err) {
-      // console.log(`[decodeSSHHostname] Failed to decode hex JSON:`, err)
-    }
-  }
-  else {
-    // console.log(`[decodeSSHHostname] Not hex-encoded, using as-is: "${hostname}"`)
+    catch {}
   }
 
   return hostname
