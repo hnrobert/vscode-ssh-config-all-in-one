@@ -180,7 +180,9 @@ async function loadRecentSSHConnections(): Promise<Map<string, string[]>> {
 
   try {
     const dbPath = getVSCodeStoragePath()
-    const SQL = await initSqlJs()
+    const SQL = await initSqlJs({
+      locateFile: (file: string) => join(__dirname, file),
+    })
     const buf = readFileSync(dbPath)
     log(`openDB (${(buf.length / 1024 / 1024).toFixed(1)}MB): ${elapsed(t0)}`)
 

@@ -13,5 +13,5 @@ export default defineConfig({
   minify: false,
   shims: false,
   skipNodeModulesBundle: false,
-  external: ['vscode', 'sql.js'],
+  external: ['vscode'],
 })
