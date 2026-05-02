@@ -5,8 +5,9 @@ import type {
   Position,
   TextDocument,
 } from 'vscode'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { basename, dirname, join } from 'node:path'
 import {
   CompletionItem,
   CompletionItemKind,
@@ -27,6 +28,7 @@ const options: Option[] = JSON.parse(
 
 const blockKeywords = new Set(['Host', 'Match'])
 const topLevelKeywords = ['Host', 'Match', 'Include']
+const INCLUDE_RE = /^Include\s+(\S*)$/
 
 function isInHostBlock(document: TextDocument, line: number): boolean {
   for (let i = line - 1; i >= 0; i--) {
@@ -38,9 +40,40 @@ function isInHostBlock(document: TextDocument, line: number): boolean {
   return false
 }
 
+function resolveIncludeBasePath(partial: string): { dir: string, prefix: string } {
+  if (partial.startsWith('~')) {
+    const expanded = partial.replace(/^~/, homedir())
+    const dir = partial.endsWith('/') ? expanded : dirname(expanded)
+    const prefix = partial.endsWith('/') ? '' : basename(expanded)
+    return { dir, prefix }
+  }
+  if (partial.startsWith('/')) {
+    const dir = partial.endsWith('/') ? partial : dirname(partial)
+    const prefix = partial.endsWith('/') ? '' : basename(partial)
+    return { dir, prefix }
+  }
+  // No prefix: relative to ~/.ssh/
+  const sshDir = join(homedir(), '.ssh')
+  if (!partial) {
+    return { dir: sshDir, prefix: '' }
+  }
+  const fullPath = join(sshDir, partial)
+  const dir = partial.endsWith('/') ? fullPath : dirname(fullPath)
+  const prefix = partial.endsWith('/') ? '' : basename(fullPath)
+  return { dir, prefix }
+}
+
+function getPathInsertPrefix(partial: string): string {
+  if (partial.startsWith('~'))
+    return partial.endsWith('/') ? partial : `${dirname(partial)}/`
+  if (partial.startsWith('/'))
+    return partial.endsWith('/') ? partial : `${dirname(partial)}/`
+  return partial.endsWith('/') ? partial : (partial ? `${dirname(partial)}/` : '')
+}
+
 export class SSHCompletionItemsProvider implements CompletionItemProvider {
   constructor(disposables: Disposable[]) {
-    disposables.push(languages.registerCompletionItemProvider(DOCUMENT_PROVIDER, this, ' ', '\n'))
+    disposables.push(languages.registerCompletionItemProvider(DOCUMENT_PROVIDER, this, ' ', '\n', '/', '~'))
   }
 
   async provideCompletionItems(document: TextDocument, position: Position): Promise<CompletionItem[] | undefined> {
@@ -50,11 +83,16 @@ export class SSHCompletionItemsProvider implements CompletionItemProvider {
     if (/^\s*#/.test(prefix))
       return undefined
 
+    // Check if we're typing a path after Include
+    const includeMatch = INCLUDE_RE.exec(prefix.trimEnd())
+    if (includeMatch) {
+      return this.providePathCompletions(includeMatch[1])
+    }
+
     const inBlock = isInHostBlock(document, position.line)
     const items: CompletionItem[] = []
 
     if (!inBlock) {
-      // Top-level: block keywords + snippets
       for (const label of topLevelKeywords) {
         const opt = options.find(o => o.label === label)
         const item = new CompletionItem(label, CompletionItemKind.Keyword)
@@ -67,7 +105,6 @@ export class SSHCompletionItemsProvider implements CompletionItemProvider {
       items.push(this.createIncusSnippet())
     }
     else {
-      // Inside a Host/Match block: all directives
       for (const opt of options) {
         if (blockKeywords.has(opt.label))
           continue
@@ -75,6 +112,57 @@ export class SSHCompletionItemsProvider implements CompletionItemProvider {
         item.documentation = new MarkdownString(opt.documentation)
         item.insertText = this.getInsertText(opt.label)
         item.sortText = opt.label
+        items.push(item)
+      }
+    }
+
+    return items
+  }
+
+  private providePathCompletions(partial: string): CompletionItem[] {
+    const { dir, prefix } = resolveIncludeBasePath(partial)
+    const insertPrefix = getPathInsertPrefix(partial)
+
+    if (!existsSync(dir))
+      return []
+
+    let entries: string[]
+    try {
+      entries = readdirSync(dir)
+    }
+    catch {
+      return []
+    }
+
+    const filtered = prefix ? entries.filter(e => e.startsWith(prefix)) : entries
+    const items: CompletionItem[] = []
+
+    for (const entry of filtered) {
+      if (entry.startsWith('.'))
+        continue
+
+      const fullPath = join(dir, entry)
+      let isDir = false
+      try {
+        isDir = statSync(fullPath).isDirectory()
+      }
+      catch {
+        continue
+      }
+
+      if (isDir) {
+        const item = new CompletionItem(entry, CompletionItemKind.Folder)
+        item.insertText = `${insertPrefix}${entry}/`
+        item.sortText = `0-${entry}`
+        items.push(item)
+      }
+      else {
+        // Only show relevant files (config-like)
+        const ext = entry.split('.').pop()?.toLowerCase() || ''
+        const isConfig = !entry.includes('.') || ['conf', 'config', 'ssh', 'ssh_config'].includes(ext)
+        const item = new CompletionItem(entry, isConfig ? CompletionItemKind.File : CompletionItemKind.File)
+        item.insertText = `${insertPrefix}${entry}`
+        item.sortText = `1-${entry}`
         items.push(item)
       }
     }
