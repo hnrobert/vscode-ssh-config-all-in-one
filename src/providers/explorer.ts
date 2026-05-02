@@ -86,7 +86,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
       this.ensureCurrentHost(),
       this.ensureRecentFolders(),
     ])
-    console.log(`[SSH Config] getSSHConfigFiles: ${dt(ts)}, ${configFiles.length} files`)
+    // console.log(`[SSH Config] getSSHConfigFiles: ${dt(ts)}, ${configFiles.length} files`)
 
     const ts2 = t0()
     this.configFilesCache = configFiles.map(file =>
@@ -99,9 +99,9 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         this._nonce,
       ),
     )
-    console.log(`[SSH Config] create config items: ${dt(ts2)}`)
+    // console.log(`[SSH Config] create config items: ${dt(ts2)}`)
 
-    console.log(`[SSH Config] getConfigFiles total: ${dt(ts)}`)
+    // console.log(`[SSH Config] getConfigFiles total: ${dt(ts)}`)
     return this.configFilesCache
   }
 
@@ -109,7 +109,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
     if (!this.currentHostCache) {
       const ts = t0()
       this.currentHostCache = await getCurrentSSHHost()
-      console.log(`[SSH Config] getCurrentSSHHost: ${dt(ts)} → ${this.currentHostCache || '(none)'}`)
+      // console.log(`[SSH Config] getCurrentSSHHost: ${dt(ts)} → ${this.currentHostCache || '(none)'}`)
     }
   }
 
@@ -149,7 +149,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
     })
 
     this.hostsCache.set(configFile.filePath, hosts)
-    console.log(`[SSH Config] getHostsForConfig (${configFile.label}): ${dt(ts)}, ${hosts.length} hosts`)
+    // console.log(`[SSH Config] getHostsForConfig (${configFile.label}): ${dt(ts)}, ${hosts.length} hosts`)
 
     return hosts
   }
@@ -159,7 +159,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
       const ts = t0()
       this.recentFolders = await getRecentSSHConnections()
       this.recentFoldersLoaded = true
-      console.log(`[SSH Config] loadRecentFolders: ${dt(ts)}`)
+      // console.log(`[SSH Config] loadRecentFolders: ${dt(ts)}`)
     }
   }
 
