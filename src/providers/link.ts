@@ -62,7 +62,7 @@ export class SSHDocumentLinkProvider implements DocumentLinkProvider {
         )
       }
     } catch (ex) {
-      console.error(ex)
+      // console.error(ex)
     }
     return result
   }

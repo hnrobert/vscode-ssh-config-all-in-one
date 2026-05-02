@@ -14,7 +14,7 @@ async function fetchSSHConfigOptions() {
       })
     }
   } catch (error) {
-    console.error('Error fetching SSH config options:', error)
+    // console.error('Error fetching SSH config options:', error)
   }
 }
 

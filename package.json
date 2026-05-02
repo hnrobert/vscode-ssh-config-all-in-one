@@ -344,7 +344,7 @@
   "scripts": {
     "publish": "vsce package --no-dependencies",
     "vscode:prepublish": "pnpm run build",
-    "build": "tsup && cp node_modules/sql.js/dist/sql-wasm.wasm out/",
+    "build": "tsup && mkdir -p out/sql.js && cp node_modules/sql.js/dist/sql-wasm.js node_modules/sql.js/dist/sql-wasm.wasm out/sql.js/",
     "watch": "tsup --watch",
     "lint": "eslint src"
   },

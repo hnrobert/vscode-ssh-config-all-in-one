@@ -1,12 +1,21 @@
+import type SqlJs from 'sql.js'
 import { readFileSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
 import { join } from 'node:path'
-import initSqlJs from 'sql.js'
 import { env } from 'vscode'
 import { decodeSSHHostname } from './sshDetection'
 
+const sqlJsDir = join(__dirname, 'sql.js')
+
+function loadSqlJs() {
+  // eslint-disable-next-line ts/no-require-imports
+  const mod = require(sqlJsDir)
+  const init = mod.default || mod
+  return init({ locateFile: (file: string) => join(sqlJsDir, file) })
+}
+
 function log(msg: string) {
-  console.log(`[SSH Config] ${msg}`)
+  // console.log(`[SSH Config] ${msg}`)
 }
 
 function now(): number {
@@ -35,14 +44,14 @@ function getVSCodeStoragePath(): string {
   return join(basePath, 'User', 'globalStorage', 'state.vscdb')
 }
 
-function queryValue(db: initSqlJs.Database, key: string): string | null {
+function queryValue(db: SqlJs.Database, key: string): string | null {
   const result = db.exec(`SELECT value FROM ItemTable WHERE key = ?`, [key])
   if (result.length > 0 && result[0].values.length > 0)
     return result[0].values[0][0] as string
   return null
 }
 
-function parseRemoteSSHStorage(db: initSqlJs.Database): Map<string, string[]> {
+function parseRemoteSSHStorage(db: SqlJs.Database): Map<string, string[]> {
   const t0 = now()
   const hostFolders = new Map<string, string[]>()
 
@@ -80,7 +89,7 @@ function parseRemoteSSHStorage(db: initSqlJs.Database): Map<string, string[]> {
 
 const SSH_URI_RE = /^vscode-remote:\/\/ssh-remote(?:\+|%2[bB])([^/]+)(\/.*)$/
 
-function parseRecentlyOpened(db: initSqlJs.Database): Map<string, string[]> {
+function parseRecentlyOpened(db: SqlJs.Database): Map<string, string[]> {
   const t0 = now()
   const hostFolders = new Map<string, string[]>()
   const dbKeys = ['recently.opened', 'history.recentlyOpenedPathsList']
@@ -180,9 +189,7 @@ async function loadRecentSSHConnections(): Promise<Map<string, string[]>> {
 
   try {
     const dbPath = getVSCodeStoragePath()
-    const SQL = await initSqlJs({
-      locateFile: (file: string) => join(__dirname, file),
-    })
+    const SQL = await loadSqlJs()
     const buf = readFileSync(dbPath)
     log(`openDB (${(buf.length / 1024 / 1024).toFixed(1)}MB): ${elapsed(t0)}`)
 
