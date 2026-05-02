@@ -5,6 +5,7 @@ import {
   connectFolder,
   connectHost,
   openConfigFile,
+  registerSSHConfigDetection,
   SSHCodeLensProvider,
   SSHCompletionItemsProvider,
   SSHDocumentLinkProvider,
@@ -100,11 +101,13 @@ export function activate(context: ExtensionContext) {
       quickPick.placeholder = 'Search SSH hosts...'
       quickPick.matchOnDescription = true
       quickPick.matchOnDetail = true
-      quickPick.items = allItems.slice(0, 10)
+      quickPick.items = allItems
+      // quickPick.items = allItems.slice(0, 10)
 
       quickPick.onDidChangeValue((value) => {
         if (!value) {
-          quickPick.items = allItems.slice(0, 10)
+          quickPick.items = allItems
+          // quickPick.items = allItems.slice(0, 10)
           return
         }
         const lower = value.toLowerCase()
@@ -431,6 +434,8 @@ export function activate(context: ExtensionContext) {
   new SSHDocumentLinkProvider(disposable)
   new SSHFormatProvider(disposable)
   new SSHCodeLensProvider(disposable)
+
+  registerSSHConfigDetection(disposable)
 
   subscriptions.push(...disposable)
 }

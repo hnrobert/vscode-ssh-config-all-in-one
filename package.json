@@ -74,6 +74,12 @@
           "default": [],
           "order": 3,
           "markdownDescription": "Default SSH config file paths to exclude from the explorer. Supports `~` for home directory. Example: `~/.ssh/config` or `/etc/ssh/ssh_config`"
+        },
+        "sshConfigAllInOne.detection.enabled": {
+          "type": "boolean",
+          "default": true,
+          "order": 4,
+          "markdownDescription": "Automatically detect files as SSH Config when the filename contains \"config\" and the content matches SSH Config patterns"
         }
       }
     },
@@ -345,10 +351,14 @@
   "devDependencies": {
     "@antfu/eslint-config": "^8.2.0",
     "@types/node": "~20.11.25",
+    "@types/sql.js": "^1.4.11",
     "@types/vscode": "^1.83.0",
     "eslint": "^10.2.0",
     "jiti": "^2.6.1",
     "tsup": "^8.5.0",
     "typescript": "5.2.2"
+  },
+  "dependencies": {
+    "sql.js": "^1.14.1"
   }
 }

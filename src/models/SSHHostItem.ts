@@ -9,6 +9,7 @@ export class SSHHostItem extends TreeItem {
     hasRecentFolders: boolean,
     isConnected: boolean = false,
     isCollapsed: boolean = false,
+    nonce?: number,
   ) {
     // Determine collapsible state based on whether it has folders and collapse state
     let state: TreeItemCollapsibleState
@@ -23,11 +24,7 @@ export class SSHHostItem extends TreeItem {
     }
 
     super(hostName, state)
-    this.id = isCollapsed
-      ? `${configFile}:${hostName}::c`
-      : hasRecentFolders
-        ? `${configFile}:${hostName}::f`
-        : `${configFile}:${hostName}`
+    this.id = nonce != null ? `${configFile}:${hostName}::${nonce}` : `${configFile}:${hostName}`
     this.contextValue = isConnected ? 'host-connected' : 'host'
 
     // Use 'vm-active' icon with green color for connected hosts

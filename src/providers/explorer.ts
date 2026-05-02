@@ -1,11 +1,14 @@
 import type { TreeDataProvider, TreeItem } from 'vscode'
-import { commands, EventEmitter, Uri, window, workspace } from 'vscode'
+import { commands, EventEmitter, languages, TreeItemCollapsibleState, Uri, window, workspace } from 'vscode'
 import { SSHConfigFileItem } from '../models/SSHConfigFileItem'
 import { SSHFolderItem } from '../models/SSHFolderItem'
 import { SSHHostItem } from '../models/SSHHostItem'
 import { getSSHConfigFiles } from '../utils/sshConfig'
 import { getCurrentSSHFolder, getCurrentSSHHost } from '../utils/sshDetection'
-import { getRecentSSHConnections } from '../utils/sshHistory'
+import { clearRecentCache, getRecentSSHConnections } from '../utils/sshHistory'
+
+const t0 = () => performance.now()
+const dt = (start: number) => `${(performance.now() - start).toFixed(1)}ms`
 
 export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   private _onDidChangeTreeData = new EventEmitter<TreeItem | undefined | null | void>()
@@ -16,27 +19,59 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   private recentFolders: Map<string, string[]> = new Map()
   private recentFoldersLoaded = false
   private currentHostCache: string | undefined
+  private parsedConfigFilesCache: Awaited<ReturnType<typeof getSSHConfigFiles>> | null = null
   private allCollapsed = false
+  private _nonce = 0
 
   refresh(): void {
     this.configFilesCache = []
     this.hostsCache.clear()
     this.excludedFolders.clear()
     this.currentHostCache = undefined
+    this.recentFoldersLoaded = false
+    this.recentFolders.clear()
+    this.parsedConfigFilesCache = null
+    clearRecentCache()
     this._onDidChangeTreeData.fire()
   }
 
   collapseAll(): void {
     this.allCollapsed = true
-    this.configFilesCache = []
-    this.hostsCache.clear()
+    this._nonce++
+    for (const item of this.configFilesCache) {
+      if (item.collapsibleState !== TreeItemCollapsibleState.None) {
+        item.collapsibleState = TreeItemCollapsibleState.Collapsed
+        item.id = `${item.filePath}::${this._nonce}`
+      }
+    }
+    for (const hosts of this.hostsCache.values()) {
+      for (const host of hosts) {
+        if (host.collapsibleState !== TreeItemCollapsibleState.None) {
+          host.collapsibleState = TreeItemCollapsibleState.Collapsed
+          host.id = `${host.configFile}:${host.hostName}::${this._nonce}`
+        }
+      }
+    }
     this._onDidChangeTreeData.fire()
   }
 
   expandAll(): void {
     this.allCollapsed = false
-    this.configFilesCache = []
-    this.hostsCache.clear()
+    this._nonce++
+    for (const item of this.configFilesCache) {
+      if (item.collapsibleState !== TreeItemCollapsibleState.None) {
+        item.collapsibleState = TreeItemCollapsibleState.Expanded
+        item.id = `${item.filePath}::${this._nonce}`
+      }
+    }
+    for (const hosts of this.hostsCache.values()) {
+      for (const host of hosts) {
+        if (host.collapsibleState !== TreeItemCollapsibleState.None) {
+          host.collapsibleState = TreeItemCollapsibleState.Expanded
+          host.id = `${host.configFile}:${host.hostName}::${this._nonce}`
+        }
+      }
+    }
     this._onDidChangeTreeData.fire()
   }
 
@@ -44,7 +79,16 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
     if (this.configFilesCache.length > 0)
       return this.configFilesCache
 
-    const configFiles = await getSSHConfigFiles()
+    const ts = t0()
+    // Load all data upfront so hosts know their expandable state immediately
+    const [configFiles] = await Promise.all([
+      getSSHConfigFiles(),
+      this.ensureCurrentHost(),
+      this.ensureRecentFolders(),
+    ])
+    console.log(`[SSH Config] getSSHConfigFiles: ${dt(ts)}, ${configFiles.length} files`)
+
+    const ts2 = t0()
     this.configFilesCache = configFiles.map(file =>
       new SSHConfigFileItem(
         file.path,
@@ -52,57 +96,39 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         file.hosts.length,
         this.allCollapsed,
         file.isCustom,
+        this._nonce,
       ),
     )
+    console.log(`[SSH Config] create config items: ${dt(ts2)}`)
 
-    // Start loading current host in background
-    this.loadCurrentHostInBackground()
-
+    console.log(`[SSH Config] getConfigFiles total: ${dt(ts)}`)
     return this.configFilesCache
   }
 
-  private async loadCurrentHostInBackground(): Promise<void> {
+  private async ensureCurrentHost(): Promise<void> {
     if (!this.currentHostCache) {
+      const ts = t0()
       this.currentHostCache = await getCurrentSSHHost()
-      // Clear hosts cache to force recreation with connection status
-      if (this.currentHostCache) {
-        this.hostsCache.clear()
-        this._onDidChangeTreeData.fire()
-      }
-    }
-  }
-
-  private async loadRecentFoldersInBackground(): Promise<void> {
-    if (!this.recentFoldersLoaded) {
-      this.recentFolders = await getRecentSSHConnections()
-      this.recentFoldersLoaded = true
-      // Clear hosts cache to force recreation with folder info
-      this.hostsCache.clear()
-      // Refresh to update folder indicators
-      this._onDidChangeTreeData.fire()
+      console.log(`[SSH Config] getCurrentSSHHost: ${dt(ts)} → ${this.currentHostCache || '(none)'}`)
     }
   }
 
   async getHostsForConfig(configFile: SSHConfigFileItem): Promise<SSHHostItem[]> {
-    // Return cached if available
     if (this.hostsCache.has(configFile.filePath))
       return this.hostsCache.get(configFile.filePath)!
 
-    const configFiles = await getSSHConfigFiles()
-    const config = configFiles.find(f => f.path === configFile.filePath)
+    const ts = t0()
+    if (!this.parsedConfigFilesCache)
+      this.parsedConfigFilesCache = await getSSHConfigFiles()
+    const config = this.parsedConfigFilesCache.find(f => f.path === configFile.filePath)
     if (!config)
       return []
 
-    // Get current host and the config file Remote-SSH is using
-    const currentHost = this.currentHostCache || await getCurrentSSHHost()
-    if (!this.currentHostCache)
-      this.currentHostCache = currentHost
+    const currentHost = this.currentHostCache!
     const activeConfigFile = workspace.getConfiguration('remote.SSH').get<string>('configFile')
 
-    // Create hosts without waiting for recent folders
     const hosts = config.hosts.map((e) => {
       const hasRecent = this.recentFolders.has(e.host) || this.recentFolders.has(e.hostname || '')
-      // Only mark as connected if this config file matches what Remote-SSH is using
       const isConfigActive = !activeConfigFile
         || configFile.filePath === activeConfigFile
       const isConnected = currentHost && isConfigActive
@@ -118,17 +144,23 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         hasRecent,
         isConnected,
         this.allCollapsed,
+        this._nonce,
       )
     })
 
     this.hostsCache.set(configFile.filePath, hosts)
-
-    // Load recent folders in background
-    if (!this.recentFoldersLoaded) {
-      this.loadRecentFoldersInBackground()
-    }
+    console.log(`[SSH Config] getHostsForConfig (${configFile.label}): ${dt(ts)}, ${hosts.length} hosts`)
 
     return hosts
+  }
+
+  private async ensureRecentFolders(): Promise<void> {
+    if (!this.recentFoldersLoaded) {
+      const ts = t0()
+      this.recentFolders = await getRecentSSHConnections()
+      this.recentFoldersLoaded = true
+      console.log(`[SSH Config] loadRecentFolders: ${dt(ts)}`)
+    }
   }
 
   private excludedFolders: Set<string> = new Set()
@@ -136,7 +168,6 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   findHostItem(hostName: string): SSHHostItem | undefined {
     const activeConfigFile = workspace.getConfiguration('remote.SSH').get<string>('configFile')
 
-    // If a specific config file is set, search it first
     if (activeConfigFile) {
       const activeHosts = this.hostsCache.get(activeConfigFile)
       if (activeHosts) {
@@ -146,7 +177,6 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
       }
     }
 
-    // Fallback: search all config files
     for (const [configPath, hosts] of this.hostsCache.entries()) {
       if (configPath === activeConfigFile)
         continue
@@ -159,7 +189,6 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
 
   removeRecentFolder(hostName: string, folder: string): void {
     this.excludedFolders.add(`${hostName}:${folder}`)
-    // Remove from in-memory cache
     const folders = this.recentFolders.get(hostName)
     if (folders) {
       const idx = folders.indexOf(folder)
@@ -190,7 +219,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
     return undefined
   }
 
-  async getChildren(element?: TreeItem): Promise<TreeItem[]> {
+  getChildren(element?: TreeItem): TreeItem[] | Promise<TreeItem[]> {
     if (!element)
       return this.getConfigFiles()
 
@@ -198,11 +227,6 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
       return this.getHostsForConfig(element)
 
     if (element instanceof SSHHostItem) {
-      // Ensure recent folders are loaded
-      if (!this.recentFoldersLoaded) {
-        await this.loadRecentFoldersInBackground()
-      }
-
       const folders = this.recentFolders.get(element.hostName)
         || this.recentFolders.get(element.description || '')
         || []
@@ -210,11 +234,12 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
       if (folders.length === 0)
         return []
 
-      const currentHost = this.currentHostCache || await getCurrentSSHHost()
+      // Fully sync — all data pre-loaded, no await, no loading indicator
+      const currentHost = this.currentHostCache
       const currentFolder = getCurrentSSHFolder()
       const activeConfigFile = workspace.getConfiguration('remote.SSH').get<string>('configFile')
       const isConfigActive = !activeConfigFile || element.configFile === activeConfigFile
-      const isThisHostConnected = isConfigActive && (element.hostName === currentHost || element.description === currentHost)
+      const isThisHostConnected = !!currentHost && isConfigActive && (element.hostName === currentHost || element.description === currentHost)
 
       return folders.map((folder) => {
         const isFolderConnected = isThisHostConnected && currentFolder === folder
@@ -245,21 +270,10 @@ export async function connectHost(
     ? 'opensshremotes.openEmptyWindowInCurrentWindow'
     : 'opensshremotes.openEmptyWindow'
 
-  try {
-    await window.withProgress(
-      {
-        location: 15,
-        title: `Connecting to ${hostName}...`,
-      },
-      () => commands.executeCommand(command, { host: hostName }),
-    )
-  }
-  catch {
-    await commands.executeCommand('vscode.newWindow', {
-      remoteAuthority: `ssh-remote+${hostName}`,
-      reuseWindow,
-    })
-  }
+  await commands.executeCommand(
+    command,
+    Uri.parse(`vscode-remote://ssh-remote+${hostName}`),
+  )
 
   provider.refresh()
 }
@@ -273,37 +287,49 @@ export async function connectFolder(
 ): Promise<void> {
   await setRemoteSSHConfigFile(configFile)
 
-  try {
-    const folderUri = Uri.parse(`vscode-remote://ssh-remote+${encodeURIComponent(hostName)}${folder}`)
+  const command = reuseWindow
+    ? 'vscode.openFolder'
+    : 'vscode.openFolder'
 
-    await window.withProgress(
-      {
-        location: 15,
-        title: `Opening ${hostName}:${folder}...`,
-      },
-      async () => {
-        await commands.executeCommand('vscode.openFolder', folderUri, {
-          forceNewWindow: !reuseWindow,
-        })
-      },
-    )
-  }
-  catch (error) {
-    window.showErrorMessage(`Failed to open folder: ${error instanceof Error ? error.message : String(error)}`)
-  }
-
-  provider.refresh()
+  await commands.executeCommand(
+    command,
+    Uri.parse(`vscode-remote://ssh-remote+${hostName}${folder}`),
+    !reuseWindow,
+  )
 }
 
 export async function openConfigFile(filePath: string, lineNumber?: number): Promise<void> {
   try {
     const uri = Uri.file(filePath)
-    const document = await window.showTextDocument(uri)
+    const editor = await window.showTextDocument(uri)
+    const doc = editor.document
+
+    if (doc.languageId === 'plaintext') {
+      const text = doc.getText()
+      const BLOCK_RE = /^\s*(?:Host|Match)\s+\S/
+      const KEYWORD_RE = /^\s+(?:HostName|User|Port|IdentityFile|ProxyCommand|ProxyJump|ForwardAgent|StrictHostKeyChecking|AddKeysToAgent|UseKeychain|ServerAliveInterval|ServerAliveCountMax|ConnectTimeout|Compression|LogLevel|Include)\b/i
+      let hasBlock = false
+      let hasKeyword = false
+      for (const line of text.split('\n').slice(0, 100)) {
+        if (BLOCK_RE.test(line))
+          hasBlock = true
+        if (KEYWORD_RE.test(line))
+          hasKeyword = true
+        if (hasBlock && hasKeyword)
+          break
+      }
+      if (hasBlock && hasKeyword) {
+        try {
+          await languages.setTextDocumentLanguage(doc, 'ssh_config')
+        }
+        catch {}
+      }
+    }
 
     if (lineNumber && lineNumber > 0) {
-      const position = document.document.lineAt(lineNumber - 1).range.start
-      document.selection = new (await import('vscode')).Selection(position, position)
-      document.revealRange(document.document.lineAt(lineNumber - 1).range)
+      const position = doc.lineAt(lineNumber - 1).range.start
+      editor.selection = new (await import('vscode')).Selection(position, position)
+      editor.revealRange(doc.lineAt(lineNumber - 1).range)
     }
   }
   catch (error) {

@@ -1,19 +1,23 @@
-import { readFile } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
+import initSqlJs from 'sql.js'
 import { env } from 'vscode'
 import { decodeSSHHostname } from './sshDetection'
 
-const readFileAsync = promisify(readFile)
-
-interface RecentWorkspace {
-  folderUri?: string
-  workspace?: { configPath: string }
-  label?: string
+function log(msg: string) {
+  console.log(`[SSH Config] ${msg}`)
 }
 
-export async function getVSCodeStoragePath(): Promise<string> {
+function now(): number {
+  return performance.now()
+}
+
+function elapsed(start: number): string {
+  return `${(now() - start).toFixed(1)}ms`
+}
+
+function getVSCodeStoragePath(): string {
   const plat = platform()
   const appName = env.appName.includes('Insiders') ? 'Code - Insiders' : 'Code'
 
@@ -31,75 +35,169 @@ export async function getVSCodeStoragePath(): Promise<string> {
   return join(basePath, 'User', 'globalStorage', 'state.vscdb')
 }
 
-export async function getRecentSSHConnections(): Promise<Map<string, string[]>> {
+function queryValue(db: initSqlJs.Database, key: string): string | null {
+  const result = db.exec(`SELECT value FROM ItemTable WHERE key = ?`, [key])
+  if (result.length > 0 && result[0].values.length > 0)
+    return result[0].values[0][0] as string
+  return null
+}
+
+function parseRemoteSSHStorage(db: initSqlJs.Database): Map<string, string[]> {
+  const t0 = now()
+  const hostFolders = new Map<string, string[]>()
+
+  const raw = queryValue(db, 'ms-vscode-remote.remote-ssh')
+  if (!raw)
+    return hostFolders
+
+  try {
+    const data = JSON.parse(raw)
+    const folderHistory: Record<string, string[]> = data['folder.history.v1'] || {}
+    log(`Remote SSH folder.history.v1: ${Object.keys(folderHistory).length} hosts`)
+
+    for (const [rawHost, folders] of Object.entries(folderHistory)) {
+      if (!Array.isArray(folders) || folders.length === 0)
+        continue
+
+      let hostname = rawHost
+      try {
+        hostname = decodeSSHHostname(rawHost)
+      }
+      catch {
+        hostname = decodeURIComponent(rawHost)
+      }
+
+      hostFolders.set(hostname, folders)
+    }
+  }
+  catch (err) {
+    log(`Failed to parse Remote SSH storage: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  log(`parseRemoteSSHStorage: ${elapsed(t0)}, ${hostFolders.size} hosts`)
+  return hostFolders
+}
+
+const SSH_URI_RE = /^vscode-remote:\/\/ssh-remote(?:\+|%2[bB])([^/]+)(\/.*)$/
+
+function parseRecentlyOpened(db: initSqlJs.Database): Map<string, string[]> {
+  const t0 = now()
+  const hostFolders = new Map<string, string[]>()
+  const dbKeys = ['recently.opened', 'history.recentlyOpenedPathsList']
+
+  let rawData: string | null = null
+  for (const key of dbKeys) {
+    rawData = queryValue(db, key)
+    if (rawData) {
+      log(`Found recently opened data with key: ${key}`)
+      break
+    }
+  }
+
+  if (!rawData)
+    return hostFolders
+
+  try {
+    const data = JSON.parse(rawData)
+    const entries: { folderUri?: string, workspace?: { configPath: string } }[] = data.entries || []
+
+    for (const entry of entries) {
+      const uri = entry.folderUri || entry.workspace?.configPath
+      if (!uri)
+        continue
+
+      const match = SSH_URI_RE.exec(uri)
+      if (!match)
+        continue
+
+      let hostname = match[1]
+      const folderPath = match[2] || '/'
+
+      try {
+        hostname = decodeSSHHostname(hostname)
+      }
+      catch {
+        hostname = decodeURIComponent(hostname)
+      }
+
+      if (!hostFolders.has(hostname))
+        hostFolders.set(hostname, [])
+
+      const folders = hostFolders.get(hostname)!
+      if (!folders.includes(folderPath))
+        folders.push(folderPath)
+    }
+  }
+  catch (err) {
+    log(`Failed to parse recently opened: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  log(`parseRecentlyOpened: ${elapsed(t0)}, ${hostFolders.size} hosts`)
+  return hostFolders
+}
+
+function mergeFolders(target: Map<string, string[]>, source: Map<string, string[]>): void {
+  for (const [host, folders] of source) {
+    if (!target.has(host)) {
+      target.set(host, [...folders])
+    }
+    else {
+      const existing = target.get(host)!
+      for (const f of folders) {
+        if (!existing.includes(f))
+          existing.push(f)
+      }
+    }
+  }
+}
+
+// Cache: dedup concurrent calls + persist result for refresh
+let cachedPromise: Promise<Map<string, string[]>> | null = null
+let cachedResult: Map<string, string[]> | null = null
+
+export function getRecentSSHConnections(): Promise<Map<string, string[]>> {
+  if (cachedResult)
+    return Promise.resolve(cachedResult)
+
+  if (!cachedPromise) {
+    cachedPromise = loadRecentSSHConnections().then((result) => {
+      cachedResult = result
+      cachedPromise = null
+      return result
+    })
+  }
+  return cachedPromise
+}
+
+export function clearRecentCache(): void {
+  cachedResult = null
+  cachedPromise = null
+}
+
+async function loadRecentSSHConnections(): Promise<Map<string, string[]>> {
+  const t0 = now()
   const hostFolders = new Map<string, string[]>()
 
   try {
-    const dbPath = await getVSCodeStoragePath()
+    const dbPath = getVSCodeStoragePath()
+    const SQL = await initSqlJs()
+    const buf = readFileSync(dbPath)
+    log(`openDB (${(buf.length / 1024 / 1024).toFixed(1)}MB): ${elapsed(t0)}`)
 
-    // Try to use sqlite3 command to read the database
-    const { exec } = await import('node:child_process')
-    const { promisify } = await import('node:util')
-    const execAsync = promisify(exec)
+    const db = new SQL.Database(buf)
 
-    try {
-      const { stdout } = await execAsync(
-        `sqlite3 "${dbPath}" "SELECT value FROM ItemTable WHERE key='history.recentlyOpenedPathsList'"`,
-      )
+    // Both sources are now synchronous — no await overhead
+    const remoteSSHData = parseRemoteSSHStorage(db)
+    const recentlyOpened = parseRecentlyOpened(db)
+    db.close()
 
-      if (stdout.trim()) {
-        const data = JSON.parse(stdout.trim())
-        const entries: RecentWorkspace[] = data.entries || []
+    mergeFolders(hostFolders, remoteSSHData)
+    mergeFolders(hostFolders, recentlyOpened)
 
-        // // console.log(`[SSH Explorer] Found ${entries.length} total entries`)
-
-        for (const entry of entries) {
-          const uri = entry.folderUri || entry.workspace?.configPath
-          if (!uri)
-            continue
-
-          // Parse vscode-remote://ssh-remote+<encoded-host>/path/to/folder
-          // or vscode-remote://ssh-remote%2B<hex-encoded-json>/path/to/folder
-          const match = /^vscode-remote:\/\/ssh-remote[+%]2[Bb]([^/]+)(\/.*)$/.exec(uri)
-          if (match) {
-            let hostname = match[1]
-            const folderPath = match[2] || '/'
-
-            // The hostname is hex-encoded JSON
-            try {
-              hostname = await decodeSSHHostname(hostname)
-            }
-            catch (err) {
-              // If decoding fails, try URL decoding
-              hostname = decodeURIComponent(hostname)
-            }
-
-            if (!hostFolders.has(hostname)) {
-              hostFolders.set(hostname, [])
-            }
-
-            const folders = hostFolders.get(hostname)!
-            if (!folders.includes(folderPath)) {
-              folders.push(folderPath)
-            }
-          }
-        }
-
-        // // console.log(`[SSH Explorer] Parsed ${hostFolders.size} SSH hosts with folders:`)
-        // for (const [host, folders] of hostFolders.entries()) {
-        //   // console.log(`  ${host}: ${folders.length} folders`)
-        // }
-      }
-      else {
-        // // console.log('[SSH Explorer] No data returned from SQLite query')
-      }
-    }
-    catch (sqliteError) {
-      // // console.error('[SSH Explorer] Failed to read SQLite database:', sqliteError)
-    }
+    log(`Total: ${hostFolders.size} hosts, ${elapsed(t0)}`)
   }
   catch (error) {
-    // // console.error('[SSH Explorer] Failed to get recent SSH connections:', error)
+    log(`Failed to get recent SSH connections: ${error instanceof Error ? error.message : String(error)}`)
   }
 
   return hostFolders
