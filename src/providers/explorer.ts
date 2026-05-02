@@ -322,7 +322,7 @@ export async function openConfigFile(filePath: string, lineNumber?: number): Pro
         try {
           await languages.setTextDocumentLanguage(doc, 'ssh_config')
         }
-        catch {}
+        catch { }
       }
     }
 
