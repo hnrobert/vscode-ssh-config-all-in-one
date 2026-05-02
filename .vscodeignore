@@ -13,3 +13,4 @@ src/**
 node_modules/**
 tsup.config.ts
 eslint.config.js
+thirdparty/**

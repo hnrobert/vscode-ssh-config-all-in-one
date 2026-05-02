@@ -8,6 +8,7 @@ export class SSHConfigFileItem extends TreeItem {
     isCollapsed: boolean = false,
     isCustom: boolean = false,
     nonce?: number,
+    isAutoDetected: boolean = false,
   ) {
     let state: TreeItemCollapsibleState
     if (hostCount === 0) {
@@ -22,7 +23,7 @@ export class SSHConfigFileItem extends TreeItem {
 
     super(label, state)
     this.id = nonce != null ? `${filePath}::${nonce}` : filePath
-    this.contextValue = isCustom ? 'config-file-custom' : 'config-file'
+    this.contextValue = isAutoDetected ? 'config-file-auto' : isCustom ? 'config-file-custom' : 'config-file'
     this.iconPath = new ThemeIcon('file-code')
     this.tooltip = filePath
     this.description = `${hostCount} hosts`

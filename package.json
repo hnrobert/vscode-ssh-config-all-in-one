@@ -80,6 +80,38 @@
           "default": true,
           "order": 4,
           "markdownDescription": "Automatically detect files as SSH Config when the filename contains \"config\" and the content matches SSH Config patterns"
+        },
+        "sshConfigAllInOne.include.mode": {
+          "type": "string",
+          "default": "separate",
+          "enum": [
+            "merge",
+            "separate",
+            "none"
+          ],
+          "enumDescriptions": [
+            "Merge hosts from included files into their parent config file",
+            "Show included files as separate entries in the explorer",
+            "Do not process Include directives"
+          ],
+          "order": 5,
+          "markdownDescription": "How to handle hosts from files discovered via `Include` directives.\n\n- **merge**: Hosts are added to the parent file's host list\n- **separate**: Included files appear as separate entries in the explorer (default)\n- **none**: Include directives are ignored"
+        },
+        "sshConfigAllInOne.include.maxDepth": {
+          "type": "string",
+          "default": "unlimited",
+          "enum": [
+            "0",
+            "1",
+            "unlimited"
+          ],
+          "enumDescriptions": [
+            "Do not follow any Include directives",
+            "Follow one level of Include directives",
+            "Follow Include directives recursively (cycles will be detected & handled gracefully)"
+          ],
+          "order": 6,
+          "markdownDescription": "How many levels of `Include` directives to follow.\n\n- **0**: No includes processed\n- **1**: Only direct includes (default)\n- **unlimited**: Recursive includes with cycle detection"
         }
       }
     },
@@ -262,6 +294,11 @@
         {
           "command": "vscode-ssh-config-all-in-one.removeConfigFile",
           "when": "view == vscode-ssh-config-all-in-one-hosts && viewItem == config-file-custom",
+          "group": "3_remove@1"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.ignoreConfigFile",
+          "when": "view == vscode-ssh-config-all-in-one-hosts && viewItem == config-file-auto",
           "group": "3_remove@1"
         },
         {

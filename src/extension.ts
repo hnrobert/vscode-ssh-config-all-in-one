@@ -12,6 +12,7 @@ import {
   SSHExplorerProvider,
   SSHFormatProvider,
   SSHHoverProvider,
+  SSHIncludeDiagnosticsProvider,
 } from './providers'
 import { parseSSHConfig } from './utils/sshConfig'
 import { getCurrentSSHHost } from './utils/sshDetection'
@@ -435,6 +436,8 @@ export function activate(context: ExtensionContext) {
   new SSHDocumentLinkProvider(disposable)
   new SSHFormatProvider(disposable)
   new SSHCodeLensProvider(disposable)
+
+  subscriptions.push(new SSHIncludeDiagnosticsProvider())
 
   registerSSHConfigDetection(disposable)
 
