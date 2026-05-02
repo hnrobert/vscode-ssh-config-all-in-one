@@ -265,6 +265,11 @@
           "group": "3_remove@1"
         },
         {
+          "command": "vscode-ssh-config-all-in-one.ignoreConfigFile",
+          "when": "view == vscode-ssh-config-all-in-one-hosts && viewItem == config-file-auto",
+          "group": "3_remove@1"
+        },
+        {
           "command": "vscode-ssh-config-all-in-one.openHostInConfig",
           "when": "view == vscode-ssh-config-all-in-one-hosts && viewItem =~ /host/",
           "group": "inline@1"

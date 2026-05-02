@@ -97,6 +97,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         this.allCollapsed,
         file.isCustom,
         this._nonce,
+        file.isAutoDetected,
       ),
     )
     // console.log(`[SSH Config] create config items: ${dt(ts2)}`)
