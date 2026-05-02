@@ -21,6 +21,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
   private currentHostCache: string | undefined
   private parsedConfigFilesCache: Awaited<ReturnType<typeof getSSHConfigFiles>> | null = null
   private allCollapsed = false
+  private _nonce = 0
 
   refresh(): void {
     this.configFilesCache = []
@@ -36,15 +37,41 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
 
   collapseAll(): void {
     this.allCollapsed = true
-    this.configFilesCache = []
-    this.hostsCache.clear()
+    this._nonce++
+    for (const item of this.configFilesCache) {
+      if (item.collapsibleState !== TreeItemCollapsibleState.None) {
+        item.collapsibleState = TreeItemCollapsibleState.Collapsed
+        item.id = `${item.filePath}::${this._nonce}`
+      }
+    }
+    for (const hosts of this.hostsCache.values()) {
+      for (const host of hosts) {
+        if (host.collapsibleState !== TreeItemCollapsibleState.None) {
+          host.collapsibleState = TreeItemCollapsibleState.Collapsed
+          host.id = `${host.configFile}:${host.hostName}::${this._nonce}`
+        }
+      }
+    }
     this._onDidChangeTreeData.fire()
   }
 
   expandAll(): void {
     this.allCollapsed = false
-    this.configFilesCache = []
-    this.hostsCache.clear()
+    this._nonce++
+    for (const item of this.configFilesCache) {
+      if (item.collapsibleState !== TreeItemCollapsibleState.None) {
+        item.collapsibleState = TreeItemCollapsibleState.Expanded
+        item.id = `${item.filePath}::${this._nonce}`
+      }
+    }
+    for (const hosts of this.hostsCache.values()) {
+      for (const host of hosts) {
+        if (host.collapsibleState !== TreeItemCollapsibleState.None) {
+          host.collapsibleState = TreeItemCollapsibleState.Expanded
+          host.id = `${host.configFile}:${host.hostName}::${this._nonce}`
+        }
+      }
+    }
     this._onDidChangeTreeData.fire()
   }
 
@@ -69,6 +96,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         file.hosts.length,
         this.allCollapsed,
         file.isCustom,
+        this._nonce,
       ),
     )
     console.log(`[SSH Config] create config items: ${dt(ts2)}`)
@@ -116,6 +144,7 @@ export class SSHExplorerProvider implements TreeDataProvider<TreeItem> {
         hasRecent,
         isConnected,
         this.allCollapsed,
+        this._nonce,
       )
     })
 
