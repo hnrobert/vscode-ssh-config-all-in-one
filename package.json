@@ -457,6 +457,11 @@
     },
     "grammars": [
       {
+        "language": "ssh_config",
+        "scopeName": "source.ssh-config-all-in-one",
+        "path": "./syntaxes/ssh_config_base.tmLanguage.json"
+      },
+      {
         "scopeName": "source.config.ssh.injection",
         "path": "./syntaxes/ssh_config.tmLanguage.json",
         "injectTo": [
