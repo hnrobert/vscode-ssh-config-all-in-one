@@ -78,7 +78,7 @@ export async function getSSHConfigFiles(): Promise<SSHConfigFile[]> {
       additionalFiles.map(async (rawPath) => {
         const path = resolveTilde(rawPath)
         const hosts = await parseSSHConfigFile(path)
-        if  (!existsSync(path))
+        if (!existsSync(path))
           return null
         const displayName = aliases[path] || basename(path)
         return {

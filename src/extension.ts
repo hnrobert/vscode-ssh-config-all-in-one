@@ -1,6 +1,6 @@
 import type { Disposable, ExtensionContext } from 'vscode'
-import type { SSHHostItem } from './models/SSHHostItem'
 import type { SSHConfigFileItem } from './models/SSHConfigFileItem'
+import type { SSHHostItem } from './models/SSHHostItem'
 import type { HostPickItem } from './utils/searchHosts'
 import { commands, env, Position, Range, SnippetString, Uri, window, workspace } from 'vscode'
 import { copyPublicKey, openUserConfig } from './functions'
@@ -449,7 +449,7 @@ export function activate(context: ExtensionContext) {
       },
     ),
   )
-   // Set custom alias for config file
+  // Set custom alias for config file
   disposable.push(
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.setFileAlias',

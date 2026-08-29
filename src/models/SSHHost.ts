@@ -11,10 +11,28 @@ export interface SSHConfigParameter {
   value: string
 }
 
+/**
+ * options.json documents verbatim text from the ssh_config(5) man page, which
+ * uses roff quoting (``value'' and `value'). Both render broken in Markdown
+ * (backticks turn into code-span delimiters), so rewrite them as proper inline
+ * code. Trailing punctuation that roff pulled inside the quotes is moved back
+ * out (``yes ,'' → `yes`,).
+ */
+function toMarkdownDocumentation(options: SSHConfigOption[]): SSHConfigOption[] {
+  return options.map(option => ({
+    ...option,
+    documentation: option.documentation
+      .replace(/``([^`]+)''|`([^`\n']+)'/g, (_, double: string, single: string) => `\`${double ?? single}\``)
+      .replace(/`([^`,.;:]*)([,.;:]+)`/g, (_, content: string, punct: string) => `\`${content.trimEnd()}\`${punct}`),
+  }))
+}
+
 export const SSH_CONFIG_OPTIONS: readonly SSHConfigOption[] = Object.freeze(
-  JSON.parse(
-    readFileSync(join(__dirname, '..', 'thirdparty', 'options.json'), 'utf8'),
-  ) as SSHConfigOption[],
+  toMarkdownDocumentation(
+    JSON.parse(
+      readFileSync(join(__dirname, '..', 'thirdparty', 'options.json'), 'utf8'),
+    ) as SSHConfigOption[],
+  ),
 )
 
 export const SSH_CONFIG_KEYWORDS: readonly string[] = Object.freeze(
