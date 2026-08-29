@@ -29,10 +29,10 @@
           "match": "^([ \\t]*)?(Host|Match)([ \\t]+)(.+)$",
           "captures": {
             "2": {
-              "name": "keyword.control.ssh_config"
+              "name": "string.other.link.title.markdown.ssh_config"
             },
             "4": {
-              "name": "entity.name.section.ssh_config"
+              "name": "constant.numeric.ssh_config"
             }
           }
         }
