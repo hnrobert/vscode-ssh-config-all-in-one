@@ -44,6 +44,15 @@
 - **Go To Definition**: Supports clicking through `Include` statements.
 - **Customizable Formatting**: Automatically indent directives under `Host` and `Match` blocks. Controlled via the `sshConfigAllInOne.format.indentSize` setting.
 
+## Compatibility
+
+Having other SSH config extensions enabled at the same time leads to duplicate completions, hovers, and highlighting:
+
+- [Remote - SSH: Editing Configuration Files](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-ssh-edit) — Microsoft's official extension, registers the same `ssh_config` language and keyword completions.
+- [SSH Config Enhanced](https://marketplace.visualstudio.com/items?itemName=jamief.vscode-ssh-config-enhanced) — the upstream project this extension is based on, registers the same completions, hover, links, and formatting providers.
+
+This extension fully replaces both. Disable them in the Extensions view to avoid the conflict.
+
 ## Formatting Example
 
 Before:
