@@ -16,7 +16,7 @@ export interface SSHConfigFile {
 type IncludeMode = 'merge' | 'separate' | 'none'
 type IncludeDepth = '0' | '1' | 'unlimited'
 
-function resolveTilde(p: string): string {
+export function resolveTilde(p: string): string {
   return p.startsWith('~/') ? join(homedir(), p.slice(2)) : p
 }
 
@@ -78,7 +78,7 @@ export async function getSSHConfigFiles(): Promise<SSHConfigFile[]> {
       additionalFiles.map(async (rawPath) => {
         const path = resolveTilde(rawPath)
         const hosts = await parseSSHConfigFile(path)
-        if  (!existsSync(path))
+        if (!existsSync(path))
           return null
         const displayName = aliases[path] || basename(path)
         return {

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "SSH Config",
+  "scopeName": "source.ssh-config-all-in-one",
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#hostHeader"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#property"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#value"
+    }
+  ],
+  "repository": {
+    "hostHeader": {
+      "patterns": [
+        {
+          "match": "^([ \\t]*)?(Host|Match)([ \\t]+)(.+)$",
+          "captures": {
+            "2": {
+              "name": "string.other.link.title.markdown.ssh_config"
+            },
+            "4": {
+              "name": "constant.numeric.ssh_config"
+            }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "match": "^([ \\t]+)?\\b(NoHostAuthenticationForLocalhost|ChallengeResponseAuthentication|KbdInteractiveAuthentication|CanonicalizePermittedCNAMEs|CanonicalizeFallbackLocal|GSSAPIDelegateCredentials|GSSAPIRenewalForcesRekey|PreferredAuthentications|HostbasedAuthentication|NumberOfPasswordPrompts|RhostsRSAAuthentication|PasswordAuthentication|KbdInteractiveDevices|StreamLocalBindUnlink|StrictHostKeyChecking|CanonicalizeHostname|ExitOnForwardFailure|GSSAPIAuthentication|GSSAPIClientIdentity|GSSAPIServerIdentity|GlobalKnownHostsFile|PubkeyAuthentication|CanonicalizeMaxDots|ClearAllForwardings|KeychainIntegration|ServerAliveCountMax|ServerAliveInterval|StreamLocalBindMask|ConnectionAttempts|PermitLocalCommand|UserKnownHostsFile|ForwardX11Timeout|ForwardX11Trusted|GSSAPIKeyExchange|HostKeyAlgorithms|HostbasedKeyTypes|RSAAuthentication|UsePrivilegedPort|CanonicalDomains|CompressionLevel|EnableSSHKeysign|VerifyHostKeyDNS|FingerprintHash|RevokedHostKeys|AddKeysToAgent|ConnectTimeout|ControlPersist|DynamicForward|GSSAPITrustDns|HashKnownHosts|IdentitiesOnly|PKCS11Provider|ProxyUseFdpass|UpdateHostKeys|AddressFamily|ControlMaster|IgnoreUnknown|KexAlgorithms|RemoteCommand|RemoteForward|VisualHostKey|XAuthLocation|ForwardAgent|GatewayPorts|HostKeyAlias|IdentityFile|LocalCommand|LocalForward|ProxyCommand|TCPKeepAlive|TunnelDevice|BindAddress|CheckHostIP|Compression|ControlPath|UseKeychain|AskPassGUI|EscapeChar|ForwardX11|RekeyLimit|RequestTTY|BatchMode|ProxyJump|HostName|LogLevel|Protocol|Ciphers|Include|SendEnv|Cipher|Tunnel|IPQoS|MACs|Port|User)\\b",
+          "name": "keyword.control.ssh_config"
+        }
+      ]
+    },
+    "property": {
+      "patterns": [
+        {
+          "match": "^([ \\t]+)?[^\\s#=]+",
+          "name": "support.type.property-name.ssh_config"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.ssh_config",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.ssh_config",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "value": {
+      "patterns": [
+        {
+          "match": "[^\\s\\\"=].*$",
+          "name": "string.unquoted.ssh_config"
+        }
+      ]
+    },
+    "comment": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.ssh_config",
+          "match": "^([ \\t]+)?#.*$"
+        }
+      ]
+    }
+  }
+}

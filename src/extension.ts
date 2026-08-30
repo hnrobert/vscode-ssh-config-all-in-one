@@ -1,6 +1,6 @@
 import type { Disposable, ExtensionContext } from 'vscode'
-import type { SSHHostItem } from './models/SSHHostItem'
 import type { SSHConfigFileItem } from './models/SSHConfigFileItem'
+import type { SSHHostItem } from './models/SSHHostItem'
 import type { HostPickItem } from './utils/searchHosts'
 import { commands, env, Position, Range, SnippetString, Uri, window, workspace } from 'vscode'
 import { copyPublicKey, openUserConfig } from './functions'
@@ -18,7 +18,7 @@ import {
   SSHIncludeDiagnosticsProvider,
 } from './providers'
 import { invalidateFuseCache, searchItems } from './utils/searchHosts'
-import { parseSSHConfig } from './utils/sshConfig'
+import { parseSSHConfig, resolveTilde } from './utils/sshConfig'
 import { getCurrentSSHHost } from './utils/sshDetection'
 
 export function activate(context: ExtensionContext) {
@@ -449,7 +449,7 @@ export function activate(context: ExtensionContext) {
       },
     ),
   )
-   // Set custom alias for config file
+  // Set custom alias for config file
   disposable.push(
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.setFileAlias',
@@ -481,7 +481,7 @@ export function activate(context: ExtensionContext) {
         const cfg = workspace.getConfiguration('sshConfigAllInOne.config')
         const current = cfg.get<string[]>('additionalFiles', [])
         // Match either raw path or resolved path
-        const filtered = current.filter(p => p !== item.filePath && p.replace(/^~/, '') !== item.filePath.replace(/^~/, ''))
+        const filtered = current.filter(p => resolveTilde(p) !== item.filePath)
         if (filtered.length === current.length)
           return
         await cfg.update('additionalFiles', filtered, true)

@@ -60,8 +60,18 @@
       "'"
     ]
   ],
-  "indentationRules": {
-    "increaseIndentPattern": "^Host .*",
-    "decreaseIndentPattern": "^\\s+$"
-  }
+  "onEnterRules": [
+    {
+      "beforeText": "^Host\\s",
+      "action": { "indent": "indent" }
+    },
+    {
+      "beforeText": "^Match\\s",
+      "action": { "indent": "indent" }
+    },
+    {
+      "beforeText": "^\\s*$",
+      "action": { "indent": "outdent" }
+    }
+  ]
 }
