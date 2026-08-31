@@ -121,7 +121,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Package the extension
-        run: pnpm dlx @vscode/vsce package --no-dependencies -o vscode-ssh-config-all-in-one-${{ steps.version.outputs.tag }}.vsix
+        run: pnpm dlx @vscode/vsce package --no-dependencies --pre-release -o vscode-ssh-config-all-in-one-${{ steps.version.outputs.tag }}.vsix
 
       - name: Create GitHub prerelease
         uses: softprops/action-gh-release@v3
@@ -137,4 +137,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to VS Code Marketplace
-        run: pnpm dlx @vscode/vsce publish --no-dependencies -p ${{ secrets.VSCE_PAT }}
+        run: pnpm dlx @vscode/vsce publish --no-dependencies --pre-release -p ${{ secrets.VSCE_PAT }}
