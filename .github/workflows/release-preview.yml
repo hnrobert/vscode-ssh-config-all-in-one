@@ -1,0 +1,140 @@
+name: Release Preview
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - "src/**"
+      - "syntaxes/**"
+      - "thirdparty/**"
+      - "docs/images/**"
+      - "language-configuration.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/release-preview.yml"
+
+permissions:
+  contents: write
+
+# Serialize releases: never cancel an in-flight publish
+concurrency:
+  group: release-preview
+  cancel-in-progress: false
+
+jobs:
+  preview-release:
+    # Skip the release-sync commits pushed by the manual Release workflow
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release)') }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Prepare pnpm and install dependencies
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.13.1 --activate
+          pnpm install --frozen-lockfile --shamefully-hoist
+
+      - name: Build the extension
+        run: pnpm run build
+
+      - name: Compute next version
+        id: version
+        run: |
+          git fetch --tags --force origin
+
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          LATEST=$(printf '%s\n' "$PKG_VERSION" $(git tag --list 'v*' | sed 's/^v//') \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST"
+          NEXT="$MAJOR.$MINOR.$((PATCH + 1))"
+
+          # If a concurrent run just claimed this tag, keep bumping
+          while git rev-parse -q --verify "refs/tags/v$NEXT" >/dev/null 2>&1; do
+            PATCH=$((PATCH + 1))
+            NEXT="$MAJOR.$MINOR.$((PATCH + 1))"
+          done
+
+          PREV_TAG="v$LATEST"
+          if git rev-parse -q --verify "$PREV_TAG" >/dev/null 2>&1; then
+            RANGE="$PREV_TAG..HEAD"
+          else
+            RANGE=""
+          fi
+
+          {
+            echo "next=$NEXT"
+            echo "tag=v$NEXT"
+            echo "range=$RANGE"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Bump version into a branchless commit and tag it
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          pnpm version "${{ steps.version.outputs.next }}" --no-git-tag-version
+          git add package.json pnpm-lock.yaml
+          git commit -m "chore(release): ${{ steps.version.outputs.tag }} [skip ci]"
+
+          # HEAD is detached on push events, so this commit belongs to no
+          # branch. Push only the tag — develop itself stays where it is,
+          # and GITHUB_TOKEN tag pushes never re-trigger workflows.
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin "refs/tags/${{ steps.version.outputs.tag }}"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          RANGE="${{ steps.version.outputs.range }}"
+          if [ -n "$RANGE" ]; then
+            COMMITS=$(git log "$RANGE" --pretty=format:"- %s" --no-merges | grep -v "^- chore(release)" || true)
+            COMPARE_LINK="https://github.com/${{ github.repository }}/compare/$RANGE"
+          else
+            COMMITS=$(git log --pretty=format:"- %s" --no-merges | grep -v "^- chore(release)" || true)
+            COMPARE_LINK="https://github.com/${{ github.repository }}/commits/${{ steps.version.outputs.tag }}"
+          fi
+
+          {
+            echo "NOTES<<EOF"
+            echo "## Preview release ${{ steps.version.outputs.tag }}"
+            echo ""
+            echo "Auto release from develop (${GITHUB_SHA::7})."
+            echo ""
+            echo "$COMMITS"
+            echo ""
+            echo "---"
+            echo "See full changelogs: [${{ steps.version.outputs.tag }}](${COMPARE_LINK})"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Package the extension
+        run: pnpm dlx @vscode/vsce package --no-dependencies --pre-release -o vscode-ssh-config-all-in-one-${{ steps.version.outputs.tag }}.vsix
+
+      - name: Create GitHub prerelease
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          files: vscode-ssh-config-all-in-one-${{ steps.version.outputs.tag }}.vsix
+          draft: false
+          prerelease: true
+          generate_release_notes: false
+          body: ${{ steps.notes.outputs.NOTES }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to VS Code Marketplace
+        run: pnpm dlx @vscode/vsce publish --no-dependencies --pre-release -p ${{ secrets.VSCE_PAT }}
