@@ -305,6 +305,60 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "vscode-ssh-config-all-in-one.connectCurrentWindow",
+          "when": "false"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.connectNewWindow",
+          "when": "false"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.connectFolderCurrentWindow",
+          "when": "false"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.connectFolderNewWindow",
+          "when": "false"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.openConfigFile",
+          "when": "false"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.openHostInConfig",
+          "when": "false"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.sendPublicKey",
+          "when": "false"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.removeHost",
+          "when": "false"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.removeRecentFolder",
+          "when": "false"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.copyHostAlias",
+          "when": "false"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.copySSHCommand",
+          "when": "false"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.ignoreConfigFile",
+          "when": "false"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.removeConfigFile",
+          "when": "false"
+        }
+      ],
       "view/title": [
         {
           "command": "vscode-ssh-config-all-in-one.searchHosts",

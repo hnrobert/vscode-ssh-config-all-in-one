@@ -2,6 +2,8 @@ import type { Disposable, ExtensionContext } from 'vscode'
 import type { SSHConfigFileItem } from './models/SSHConfigFileItem'
 import type { SSHHostItem } from './models/SSHHostItem'
 import type { HostPickItem } from './utils/searchHosts'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { commands, env, Position, Range, SnippetString, Uri, window, workspace } from 'vscode'
 import { copyPublicKey, openUserConfig } from './functions'
 import {
@@ -44,6 +46,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.connectCurrentWindow',
       (hostOrItem: string | { hostName: string, configFile: string }, configFile?: string) => {
+        if (!hostOrItem) {
+          window.showErrorMessage('Please right-click a host to connect')
+          return
+        }
         const hostName = typeof hostOrItem === 'string' ? hostOrItem : hostOrItem.hostName
         const cfg = typeof hostOrItem === 'string' ? configFile : hostOrItem.configFile
         connectHost(hostName, explorerProvider, true, cfg)
@@ -55,6 +61,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.connectNewWindow',
       (hostOrItem: string | { hostName: string, configFile: string }, configFile?: string) => {
+        if (!hostOrItem) {
+          window.showErrorMessage('Please right-click a host to connect')
+          return
+        }
         const hostName = typeof hostOrItem === 'string' ? hostOrItem : hostOrItem.hostName
         const cfg = typeof hostOrItem === 'string' ? configFile : hostOrItem.configFile
         connectHost(hostName, explorerProvider, false, cfg)
@@ -236,6 +246,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.connectFolderCurrentWindow',
       (item: { hostName: string, folder: string, configFile?: string }) => {
+        if (!item?.hostName) {
+          window.showErrorMessage('Please right-click a recent folder to connect')
+          return
+        }
         connectFolder(item.hostName, item.folder, explorerProvider, true, item.configFile)
       },
     ),
@@ -245,6 +259,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.connectFolderNewWindow',
       (item: { hostName: string, folder: string, configFile?: string }) => {
+        if (!item?.hostName) {
+          window.showErrorMessage('Please right-click a recent folder to connect')
+          return
+        }
         connectFolder(item.hostName, item.folder, explorerProvider, false, item.configFile)
       },
     ),
@@ -284,6 +302,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.openConfigFile',
       (item: { filePath: string }) => {
+        if (!item?.filePath) {
+          window.showErrorMessage('Please right-click a config file to open it')
+          return
+        }
         openConfigFile(item.filePath)
       },
     ),
@@ -292,7 +314,7 @@ export function activate(context: ExtensionContext) {
   disposable.push(
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.addNewHost',
-      async (item: { filePath: string }) => {
+      async (item?: { filePath: string }) => {
         const input = await window.showInputBox({
           prompt: 'Enter SSH connection command or host alias',
           placeHolder: 'user@hostname',
@@ -303,7 +325,8 @@ export function activate(context: ExtensionContext) {
 
         const parsed = parseSSHInput(input)
 
-        const doc = await workspace.openTextDocument(Uri.file(item.filePath))
+        const filePath = item?.filePath ?? join(homedir(), '.ssh', 'config')
+        const doc = await workspace.openTextDocument(Uri.file(filePath))
         const editor = await window.showTextDocument(doc)
 
         const lastLine = doc.lineAt(doc.lineCount - 1)
@@ -324,6 +347,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.openHostInConfig',
       (item: { configFile: string, lineNumber?: number }) => {
+        if (!item?.configFile) {
+          window.showErrorMessage('Please right-click a host to open it in the config file')
+          return
+        }
         openConfigFile(item.configFile, item.lineNumber)
       },
     ),
@@ -334,6 +361,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.sendPublicKey',
       (item: { hostName: string }) => {
+        if (!item?.hostName) {
+          window.showErrorMessage('Please right-click a host to send the public key')
+          return
+        }
         copyPublicKey(item.hostName)
       },
     ),
@@ -344,6 +375,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.removeHost',
       async (item: { hostName: string, configFile: string, lineNumber?: number }) => {
+        if (!item?.hostName) {
+          window.showErrorMessage('Please right-click a host to remove it')
+          return
+        }
         const confirm = await window.showWarningMessage(
           `Remove host "${item.hostName}"?`,
           { modal: true },
@@ -380,6 +415,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.removeRecentFolder',
       async (item: { hostName: string, folder: string }) => {
+        if (!item?.hostName) {
+          window.showErrorMessage('Please right-click a recent folder to remove it')
+          return
+        }
         explorerProvider.removeRecentFolder(item.hostName, item.folder)
       },
     ),
@@ -390,6 +429,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.copyHostAlias',
       async (item: { hostName: string }) => {
+        if (!item?.hostName) {
+          window.showErrorMessage('Please right-click a host to copy its alias')
+          return
+        }
         await env.clipboard.writeText(item.hostName)
         window.showInformationMessage(`Copied: ${item.hostName}`)
       },
@@ -401,6 +444,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.copySSHCommand',
       async (item: SSHHostItem) => {
+        if (!item?.sshHost) {
+          window.showErrorMessage('Please right-click a host to copy its SSH command')
+          return
+        }
         const cmd = item.sshHost.toSSHCommand()
         await env.clipboard.writeText(cmd)
         window.showInformationMessage(`Copied: ${cmd}`)
@@ -440,6 +487,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.ignoreConfigFile',
       async (item: { filePath: string }) => {
+        if (!item?.filePath) {
+          window.showErrorMessage('Please right-click a config file to ignore it')
+          return
+        }
         const cfg = workspace.getConfiguration('sshConfigAllInOne.config')
         const current = cfg.get<string[]>('excludeDefaultFiles', [])
         if (current.includes(item.filePath))
@@ -478,6 +529,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.removeConfigFile',
       async (item: { filePath: string }) => {
+        if (!item?.filePath) {
+          window.showErrorMessage('Please right-click a config file to remove it')
+          return
+        }
         const cfg = workspace.getConfiguration('sshConfigAllInOne.config')
         const current = cfg.get<string[]>('additionalFiles', [])
         // Match either raw path or resolved path
@@ -598,16 +653,16 @@ function parseSSHInput(input: string): ParsedSSH {
     user: user || undefined,
     identityFile: identityFile || undefined,
     toSnippetString() {
-      let snippet = `Host \${1:${host}}\n    HostName \${2:${hostname}}`
+      let snippet = `Host \${1:${host}}\n\tHostName \${2:${hostname}}`
       if (user)
-        snippet += `\n    User ${user}`
+        snippet += `\n\tUser ${user}`
       if (port)
-        snippet += `\n    Port ${port}`
+        snippet += `\n\tPort ${port}`
       if (identityFile)
-        snippet += `\n    IdentityFile ${identityFile}`
+        snippet += `\n\tIdentityFile ${identityFile}`
       // Add User placeholder only if not already set from input
       if (!user)
-        snippet += `\n    User \${3}`
+        snippet += `\n\tUser \${3}`
       snippet += '\n'
       return snippet
     },
