@@ -1,9 +1,9 @@
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import type { Disposable, ExtensionContext } from 'vscode'
 import type { SSHConfigFileItem } from './models/SSHConfigFileItem'
 import type { SSHHostItem } from './models/SSHHostItem'
 import type { HostPickItem } from './utils/searchHosts'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { commands, env, Position, Range, SnippetString, Uri, window, workspace } from 'vscode'
 import { copyPublicKey, openUserConfig } from './functions'
 import {
@@ -46,6 +46,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.connectCurrentWindow',
       (hostOrItem: string | { hostName: string, configFile: string }, configFile?: string) => {
+        if (!hostOrItem) {
+          window.showErrorMessage('Please right-click a host to connect')
+          return
+        }
         const hostName = typeof hostOrItem === 'string' ? hostOrItem : hostOrItem.hostName
         const cfg = typeof hostOrItem === 'string' ? configFile : hostOrItem.configFile
         connectHost(hostName, explorerProvider, true, cfg)
@@ -57,6 +61,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.connectNewWindow',
       (hostOrItem: string | { hostName: string, configFile: string }, configFile?: string) => {
+        if (!hostOrItem) {
+          window.showErrorMessage('Please right-click a host to connect')
+          return
+        }
         const hostName = typeof hostOrItem === 'string' ? hostOrItem : hostOrItem.hostName
         const cfg = typeof hostOrItem === 'string' ? configFile : hostOrItem.configFile
         connectHost(hostName, explorerProvider, false, cfg)
@@ -238,6 +246,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.connectFolderCurrentWindow',
       (item: { hostName: string, folder: string, configFile?: string }) => {
+        if (!item?.hostName) {
+          window.showErrorMessage('Please right-click a recent folder to connect')
+          return
+        }
         connectFolder(item.hostName, item.folder, explorerProvider, true, item.configFile)
       },
     ),
@@ -247,6 +259,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.connectFolderNewWindow',
       (item: { hostName: string, folder: string, configFile?: string }) => {
+        if (!item?.hostName) {
+          window.showErrorMessage('Please right-click a recent folder to connect')
+          return
+        }
         connectFolder(item.hostName, item.folder, explorerProvider, false, item.configFile)
       },
     ),
@@ -286,6 +302,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.openConfigFile',
       (item: { filePath: string }) => {
+        if (!item?.filePath) {
+          window.showErrorMessage('Please right-click a config file to open it')
+          return
+        }
         openConfigFile(item.filePath)
       },
     ),
@@ -327,6 +347,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.openHostInConfig',
       (item: { configFile: string, lineNumber?: number }) => {
+        if (!item?.configFile) {
+          window.showErrorMessage('Please right-click a host to open it in the config file')
+          return
+        }
         openConfigFile(item.configFile, item.lineNumber)
       },
     ),
@@ -337,6 +361,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.sendPublicKey',
       (item: { hostName: string }) => {
+        if (!item?.hostName) {
+          window.showErrorMessage('Please right-click a host to send the public key')
+          return
+        }
         copyPublicKey(item.hostName)
       },
     ),
@@ -347,6 +375,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.removeHost',
       async (item: { hostName: string, configFile: string, lineNumber?: number }) => {
+        if (!item?.hostName) {
+          window.showErrorMessage('Please right-click a host to remove it')
+          return
+        }
         const confirm = await window.showWarningMessage(
           `Remove host "${item.hostName}"?`,
           { modal: true },
@@ -383,6 +415,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.removeRecentFolder',
       async (item: { hostName: string, folder: string }) => {
+        if (!item?.hostName) {
+          window.showErrorMessage('Please right-click a recent folder to remove it')
+          return
+        }
         explorerProvider.removeRecentFolder(item.hostName, item.folder)
       },
     ),
@@ -393,6 +429,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.copyHostAlias',
       async (item: { hostName: string }) => {
+        if (!item?.hostName) {
+          window.showErrorMessage('Please right-click a host to copy its alias')
+          return
+        }
         await env.clipboard.writeText(item.hostName)
         window.showInformationMessage(`Copied: ${item.hostName}`)
       },
@@ -404,6 +444,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.copySSHCommand',
       async (item: SSHHostItem) => {
+        if (!item?.sshHost) {
+          window.showErrorMessage('Please right-click a host to copy its SSH command')
+          return
+        }
         const cmd = item.sshHost.toSSHCommand()
         await env.clipboard.writeText(cmd)
         window.showInformationMessage(`Copied: ${cmd}`)
@@ -443,6 +487,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.ignoreConfigFile',
       async (item: { filePath: string }) => {
+        if (!item?.filePath) {
+          window.showErrorMessage('Please right-click a config file to ignore it')
+          return
+        }
         const cfg = workspace.getConfiguration('sshConfigAllInOne.config')
         const current = cfg.get<string[]>('excludeDefaultFiles', [])
         if (current.includes(item.filePath))
@@ -481,6 +529,10 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(
       'vscode-ssh-config-all-in-one.removeConfigFile',
       async (item: { filePath: string }) => {
+        if (!item?.filePath) {
+          window.showErrorMessage('Please right-click a config file to remove it')
+          return
+        }
         const cfg = workspace.getConfiguration('sshConfigAllInOne.config')
         const current = cfg.get<string[]>('additionalFiles', [])
         // Match either raw path or resolved path
