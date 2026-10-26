@@ -37,6 +37,9 @@
   | `prod \| staging`            | OR — matches either                                         |
 
   Switch back to simple substring matching via `sshConfigAllInOne.search.mode: simple`.
+- **Global Search Shortcuts**: Host search is available from anywhere via keybindings (identical on all platforms, including macOS):
+  - `Ctrl+Alt+F` — open the fuzzy host search; the accept behavior follows `sshConfigAllInOne.search.onAccept`
+  - `Ctrl+Alt+S` — search hosts and connect to the selected one in a new window
 - **Universal Formatter**: Formats your SSH config regardless of where it's opened (local, remote workspace, or even unsaved untitled files).
 - **Autocompletion**: Provides rich suggestions as you type in an SSH config file.
 - **Syntax Highlighting**: Enhanced and refined syntax grammar.

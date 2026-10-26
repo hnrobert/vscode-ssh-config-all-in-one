@@ -282,6 +282,10 @@
         "icon": "$(search)"
       },
       {
+        "command": "vscode-ssh-config-all-in-one.searchAndConnectNewWindow",
+        "title": "Search and Connect in New Window"
+      },
+      {
         "command": "vscode-ssh-config-all-in-one.addConfigFile",
         "title": "Add Config File",
         "icon": "$(add)"
@@ -509,6 +513,16 @@
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "vscode-ssh-config-all-in-one.searchHosts",
+        "key": "ctrl+alt+f"
+      },
+      {
+        "command": "vscode-ssh-config-all-in-one.searchAndConnectNewWindow",
+        "key": "ctrl+alt+s"
+      }
+    ],
     "grammars": [
       {
         "language": "ssh_config",

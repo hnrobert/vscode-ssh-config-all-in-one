@@ -97,50 +97,8 @@ export function activate(context: ExtensionContext) {
 
   // Search hosts with live filtering
   disposable.push(
-    commands.registerCommand('vscode-ssh-config-all-in-one.searchHosts', async () => {
-      const allHosts = await parseSSHConfig()
-      invalidateFuseCache()
-
-      const toItem = (h: typeof allHosts[number]): HostPickItem => ({
-        label: h.host,
-        description: h.hostname,
-        detail: h.configFile,
-        hostName: h.host,
-        configFile: h.configFile,
-        lineNumber: h.lineNumber,
-      })
-
-      const allItems = allHosts.map(toItem)
-
-      const quickPick = window.createQuickPick<ReturnType<typeof toItem>>()
-      quickPick.placeholder = 'Search SSH hosts... (fuzzy: "exact" or \'exact\', ^prefix, suffix$, !exclude, a | b)'
-      quickPick.matchOnDescription = false
-      quickPick.matchOnDetail = false
-      quickPick.items = allItems
-
-      quickPick.onDidChangeValue((value) => {
-        if (!value.trim()) {
-          quickPick.items = allItems
-          return
-        }
-        const results = searchItems(allItems, value)
-        // Extract first plain token (strip operators/quotes) for VS Code's
-        // built-in label highlight. Fall back to alwaysShow-only if empty.
-        const firstToken = value.trim().replace(/["']/g, ' ').trim().split(/\s+/).find(t => t.replace(/^[!^]|\$$/g, '').length > 0)?.replace(/^[!^]|\$$/g, '') ?? ''
-        quickPick.items = results.map(item => ({
-          ...item,
-          ...(firstToken ? { filterText: firstToken } : {}),
-          alwaysShow: true,
-        }))
-      })
-
-      quickPick.onDidAccept(async () => {
-        const selected = quickPick.selectedItems[0]
-        quickPick.hide()
-
-        if (!selected)
-          return
-
+    commands.registerCommand('vscode-ssh-config-all-in-one.searchHosts', () =>
+      showHostSearchQuickPick(async (selected) => {
         const onAccept = workspace.getConfiguration('sshConfigAllInOne.search').get<string>('onAccept', 'revealInExplorer')
 
         if (onAccept === 'revealInExplorer' || onAccept === 'both') {
@@ -164,10 +122,16 @@ export function activate(context: ExtensionContext) {
           if (!item && selected.configFile && selected.lineNumber)
             await openConfigFile(selected.configFile, selected.lineNumber)
         }
-      })
+      })),
+  )
 
-      quickPick.show()
-    }),
+  // Search hosts and connect to the selected one in a new window
+  disposable.push(
+    commands.registerCommand('vscode-ssh-config-all-in-one.searchAndConnectNewWindow', () =>
+      showHostSearchQuickPick(
+        selected => connectHost(selected.hostName, explorerProvider, false, selected.configFile),
+        `Search SSH hosts... selecting connects in a new window (${FUZZY_HINT})`,
+      )),
   )
 
   // Add config file from file picker
@@ -560,6 +524,65 @@ export function activate(context: ExtensionContext) {
 
 export function deactivate() {
   // noop
+}
+
+const FUZZY_HINT = 'fuzzy: "exact" or \'exact\', ^prefix, suffix$, !exclude, a | b'
+
+/**
+ * Shows the shared host-search quick pick with live filtering and passes the
+ * picked host to `onAccept`.
+ */
+async function showHostSearchQuickPick(
+  onAccept: (selected: HostPickItem) => Promise<void> | void,
+  placeholder: string = `Search SSH hosts... (${FUZZY_HINT})`,
+): Promise<void> {
+  const allHosts = await parseSSHConfig()
+  invalidateFuseCache()
+
+  const toItem = (h: typeof allHosts[number]): HostPickItem => ({
+    label: h.host,
+    description: h.hostname,
+    detail: h.configFile,
+    hostName: h.host,
+    configFile: h.configFile,
+    lineNumber: h.lineNumber,
+  })
+
+  const allItems = allHosts.map(toItem)
+
+  const quickPick = window.createQuickPick<ReturnType<typeof toItem>>()
+  quickPick.placeholder = placeholder
+  quickPick.matchOnDescription = false
+  quickPick.matchOnDetail = false
+  quickPick.items = allItems
+
+  quickPick.onDidChangeValue((value) => {
+    if (!value.trim()) {
+      quickPick.items = allItems
+      return
+    }
+    const results = searchItems(allItems, value)
+    // Extract first plain token (strip operators/quotes) for VS Code's
+    // built-in label highlight. Fall back to alwaysShow-only if empty.
+    const firstToken = value.trim().replace(/["']/g, ' ').trim().split(/\s+/).find(t => t.replace(/^[!^]|\$$/g, '').length > 0)?.replace(/^[!^]|\$$/g, '') ?? ''
+    quickPick.items = results.map(item => ({
+      ...item,
+      ...(firstToken ? { filterText: firstToken } : {}),
+      alwaysShow: true,
+    }))
+  })
+
+  quickPick.onDidAccept(async () => {
+    const selected = quickPick.selectedItems[0]
+    quickPick.hide()
+
+    if (!selected)
+      return
+
+    await onAccept(selected)
+  })
+
+  quickPick.show()
 }
 
 interface ParsedSSH {
