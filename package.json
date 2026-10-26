@@ -516,7 +516,7 @@
     "keybindings": [
       {
         "command": "vscode-ssh-config-all-in-one.searchHosts",
-        "key": "ctrl+shift+s"
+        "key": "ctrl+alt+f"
       },
       {
         "command": "vscode-ssh-config-all-in-one.searchAndConnectNewWindow",
