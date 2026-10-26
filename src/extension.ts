@@ -10,6 +10,8 @@ import {
   connectFolder,
   connectHost,
   openConfigFile,
+  PortForwardManager,
+  promptAndAddPortForward,
   registerSSHConfigDetection,
   SSHCodeLensProvider,
   SSHCompletionItemsProvider,
@@ -18,6 +20,7 @@ import {
   SSHFormatProvider,
   SSHHoverProvider,
   SSHIncludeDiagnosticsProvider,
+  SSHPortsPanelProvider,
 } from './providers'
 import { invalidateFuseCache, searchItems } from './utils/searchHosts'
 import { parseSSHConfig, resolveTilde } from './utils/sshConfig'
@@ -34,6 +37,35 @@ export function activate(context: ExtensionContext) {
     showCollapseAll: false,
   })
   disposable.push(treeView)
+
+  // SSH PORTS panel + persistent ssh -N -L/-R tunnels
+  const portForwardManager = new PortForwardManager(explorerProvider)
+  const sshPortsPanel = new SSHPortsPanelProvider(portForwardManager)
+  disposable.push(portForwardManager, sshPortsPanel)
+  disposable.push(
+    window.registerWebviewViewProvider(SSHPortsPanelProvider.viewId, sshPortsPanel),
+  )
+
+  disposable.push(
+    commands.registerCommand(
+      'vscode-ssh-config-all-in-one.addPortForward',
+      (item?: { hostName: string }) => promptAndAddPortForward(portForwardManager, item?.hostName),
+    ),
+  )
+
+  disposable.push(
+    commands.registerCommand(
+      'vscode-ssh-config-all-in-one.stopAllPortForwards',
+      () => portForwardManager.stopAll(),
+    ),
+  )
+
+  disposable.push(
+    commands.registerCommand(
+      'vscode-ssh-config-all-in-one.removePortForward',
+      (id: string) => portForwardManager.removeRule(id),
+    ),
+  )
 
   disposable.push(
     commands.registerCommand(

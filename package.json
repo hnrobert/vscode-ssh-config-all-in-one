@@ -167,6 +167,58 @@
             "type": "string"
           },
           "markdownDescription": "Set a custom display name for SSH config files. Key is the file path (supports `~`), value is the display name. Example: `{ \"~/.ssh/config.d/vps.conf\": \"VPS Server\" }`"
+        },
+        "sshConfigAllInOne.portForwards": {
+          "type": "array",
+          "default": [],
+          "order": 11,
+          "items": {
+            "type": "object",
+            "required": [
+              "hostName",
+              "direction",
+              "localAddress",
+              "localPort",
+              "remoteAddress",
+              "remotePort"
+            ],
+            "properties": {
+              "hostName": {
+                "type": "string",
+                "description": "SSH host alias from your config"
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "local",
+                  "remote"
+                ],
+                "enumDescriptions": [
+                  "Local → Remote (ssh -L): listen on this machine",
+                  "Remote → Local (ssh -R): listen on the remote machine"
+                ]
+              },
+              "localAddress": {
+                "type": "string",
+                "description": "For local: bind address on this machine. For remote: destination host on this machine."
+              },
+              "localPort": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "remoteAddress": {
+                "type": "string",
+                "description": "For local: destination host resolved on the remote machine. For remote: bind address on the remote machine."
+              },
+              "remotePort": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            }
+          },
+          "markdownDescription": "SSH port forwarding rules managed by the **SSH PORTS** panel and the *Forward Port...* host context-menu action. Each rule keeps a persistent `ssh -N -L/-R` tunnel alive with automatic retries."
         }
       }
     },
@@ -177,6 +229,13 @@
           "title": "SSH Config All In One",
           "icon": "docs/images/icon-stroke.svg"
         }
+      ],
+      "panel": [
+        {
+          "id": "ssh-config-all-in-one-panel",
+          "title": "SSH PORTS",
+          "icon": "docs/images/icon-stroke.svg"
+        }
       ]
     },
     "views": {
@@ -184,6 +243,14 @@
         {
           "id": "vscode-ssh-config-all-in-one-hosts",
           "name": "SSH Config All In One",
+          "icon": "docs/images/icon-stroke.svg"
+        }
+      ],
+      "ssh-config-all-in-one-panel": [
+        {
+          "type": "webview",
+          "id": "vscode-ssh-config-all-in-one.sshPorts",
+          "name": "SSH Ports",
           "icon": "docs/images/icon-stroke.svg"
         }
       ]
@@ -306,6 +373,21 @@
       {
         "command": "vscode-ssh-config-all-in-one.setFileAlias",
         "title": "Set Alias..."
+      },
+      {
+        "command": "vscode-ssh-config-all-in-one.addPortForward",
+        "title": "Forward Port...",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "vscode-ssh-config-all-in-one.stopAllPortForwards",
+        "title": "Stop All Port Forwards",
+        "icon": "$(stop-circle)"
+      },
+      {
+        "command": "vscode-ssh-config-all-in-one.removePortForward",
+        "title": "Remove Port Forward",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -361,6 +443,10 @@
         {
           "command": "vscode-ssh-config-all-in-one.removeConfigFile",
           "when": "false"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.removePortForward",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -398,6 +484,16 @@
           "command": "vscode-ssh-config-all-in-one.openSettings",
           "when": "view == vscode-ssh-config-all-in-one-hosts",
           "group": "navigation@6"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.addPortForward",
+          "when": "view == vscode-ssh-config-all-in-one.sshPorts",
+          "group": "navigation@1"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.stopAllPortForwards",
+          "when": "view == vscode-ssh-config-all-in-one.sshPorts",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -460,6 +556,11 @@
           "command": "vscode-ssh-config-all-in-one.connectNewWindow",
           "when": "view == vscode-ssh-config-all-in-one-hosts && viewItem =~ /host/",
           "group": "1_connect@2"
+        },
+        {
+          "command": "vscode-ssh-config-all-in-one.addPortForward",
+          "when": "view == vscode-ssh-config-all-in-one-hosts && viewItem =~ /host/",
+          "group": "1_connect@3"
         },
         {
           "command": "vscode-ssh-config-all-in-one.testConnection",
