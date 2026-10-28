@@ -218,7 +218,7 @@
               }
             }
           },
-          "markdownDescription": "SSH port forwarding rules managed by the **SSH PORTS** panel and the *Forward Port...* host context-menu action. Each rule keeps a persistent `ssh -N -L/-R` tunnel alive with automatic retries."
+          "markdownDescription": "SSH port forwarding rules managed by the **SSH Tunnels** panel and the *Forward Port...* host context-menu action. Each rule keeps a persistent `ssh -N -L/-R` tunnel alive with automatic retries."
         }
       }
     },
@@ -233,7 +233,7 @@
       "panel": [
         {
           "id": "ssh-config-all-in-one-panel",
-          "title": "SSH PORTS",
+          "title": "SSH Tunnels",
           "icon": "docs/images/icon-stroke.svg"
         }
       ]
@@ -249,8 +249,8 @@
       "ssh-config-all-in-one-panel": [
         {
           "type": "webview",
-          "id": "vscode-ssh-config-all-in-one.sshPorts",
-          "name": "SSH Ports",
+          "id": "vscode-ssh-config-all-in-one.sshTunnels",
+          "name": "SSH Tunnels",
           "icon": "docs/images/icon-stroke.svg"
         }
       ]
@@ -487,12 +487,12 @@
         },
         {
           "command": "vscode-ssh-config-all-in-one.addPortForward",
-          "when": "view == vscode-ssh-config-all-in-one.sshPorts",
+          "when": "view == vscode-ssh-config-all-in-one.sshTunnels",
           "group": "navigation@1"
         },
         {
           "command": "vscode-ssh-config-all-in-one.stopAllPortForwards",
-          "when": "view == vscode-ssh-config-all-in-one.sshPorts",
+          "when": "view == vscode-ssh-config-all-in-one.sshTunnels",
           "group": "navigation@2"
         }
       ],

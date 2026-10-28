@@ -14,12 +14,12 @@ interface PanelMessage {
 }
 
 /**
- * The SSH PORTS panel — a webview view in the bottom panel, styled after
+ * The SSH Tunnels panel — a webview view in the bottom panel, styled after
  * VS Code's built-in Ports view. Each row is an `ssh -N -L/-R` tunnel whose
  * direction, host and both-sided addresses are editable in place.
  */
-export class SSHPortsPanelProvider implements WebviewViewProvider, Disposable {
-  static readonly viewId = 'vscode-ssh-config-all-in-one.sshPorts'
+export class SSHTunnelsPanelProvider implements WebviewViewProvider, Disposable {
+  static readonly viewId = 'vscode-ssh-config-all-in-one.sshTunnels'
 
   private view: WebviewView | undefined
   private readonly listener: Disposable

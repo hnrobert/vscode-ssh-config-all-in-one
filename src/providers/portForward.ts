@@ -23,7 +23,7 @@ export interface PortForwardRule {
   remotePort: number
 }
 
-/** A rule merged with its runtime state, as consumed by the SSH PORTS panel. */
+/** A rule merged with its runtime state, as consumed by the SSH Tunnels panel. */
 export interface ForwardViewRow extends PortForwardRule {
   id: string
   status: ForwardStatus
@@ -96,7 +96,7 @@ export class PortForwardManager implements Disposable {
   private readonly entries = new Map<string, Entry>()
   private readonly _onDidChange = new EventEmitter<void>()
   private readonly configListener: Disposable
-  private readonly channel: OutputChannel = window.createOutputChannel('SSH PORTS')
+  private readonly channel: OutputChannel = window.createOutputChannel('SSH Tunnels')
 
   constructor(private readonly provider: SSHExplorerProvider) {
     this.configListener = workspace.onDidChangeConfiguration((e) => {
@@ -238,7 +238,7 @@ export class PortForwardManager implements Disposable {
     this._onDidChange.dispose()
   }
 
-  /** Everything lands in the "SSH PORTS" output channel so failures are diagnosable. */
+  /** Everything lands in the "SSH Tunnels" output channel so failures are diagnosable. */
   private log(message: string): void {
     this.channel.appendLine(`[${new Date().toLocaleTimeString()}] ${message}`)
   }
@@ -408,7 +408,7 @@ interface DirectionPickItem extends QuickPickItem {
 /**
  * Multi-step quick input that creates (and starts) a port forward rule.
  * `presetHostName` comes from the explorer context menu, `presetPort` from
- * the SSH PORTS panel's quick-add input.
+ * the SSH Tunnels panel's quick-add input.
  */
 export async function promptAndAddPortForward(
   manager: PortForwardManager,
@@ -492,7 +492,7 @@ export async function promptAndAddPortForward(
   if (!id)
     return
 
-  await commands.executeCommand('vscode-ssh-config-all-in-one.sshPorts.focus')
+  await commands.executeCommand('vscode-ssh-config-all-in-one.sshTunnels.focus')
   const summary = rule.direction === 'local'
     ? `localhost:${localPort} → ${hostName}:${remotePort} (ssh -L)`
     : `${hostName}:${remotePort} → localhost:${localPort} (ssh -R)`

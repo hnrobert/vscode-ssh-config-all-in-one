@@ -20,7 +20,7 @@ import {
   SSHFormatProvider,
   SSHHoverProvider,
   SSHIncludeDiagnosticsProvider,
-  SSHPortsPanelProvider,
+  SSHTunnelsPanelProvider,
 } from './providers'
 import { invalidateFuseCache, searchItems } from './utils/searchHosts'
 import { parseSSHConfig, resolveTilde } from './utils/sshConfig'
@@ -38,12 +38,12 @@ export function activate(context: ExtensionContext) {
   })
   disposable.push(treeView)
 
-  // SSH PORTS panel + persistent ssh -N -L/-R tunnels
+  // SSH Tunnels panel + persistent ssh -N -L/-R tunnels
   const portForwardManager = new PortForwardManager(explorerProvider)
-  const sshPortsPanel = new SSHPortsPanelProvider(portForwardManager)
-  disposable.push(portForwardManager, sshPortsPanel)
+  const sshTunnelsPanel = new SSHTunnelsPanelProvider(portForwardManager)
+  disposable.push(portForwardManager, sshTunnelsPanel)
   disposable.push(
-    window.registerWebviewViewProvider(SSHPortsPanelProvider.viewId, sshPortsPanel),
+    window.registerWebviewViewProvider(SSHTunnelsPanelProvider.viewId, sshTunnelsPanel),
   )
 
   disposable.push(
