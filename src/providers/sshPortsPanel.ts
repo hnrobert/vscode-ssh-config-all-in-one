@@ -265,17 +265,17 @@ export class SSHPortsPanelProvider implements WebviewViewProvider, Disposable {
   function dirInfo(row) {
     if (row.direction === 'local') {
       return {
-        label: 'Local → Remote',
+        label: 'Listen Local (-L)',
         cls: 'dir-local',
-        icon: I.arrowR,
-        title: 'ssh -L — listen on this machine, tunnel into the remote network'
+        icon: I.arrowL,
+        title: 'ssh -L — listen on this machine and tunnel to a destination reachable from the remote host (bring a remote service to localhost)'
       };
     }
     return {
-      label: 'Remote → Local',
+      label: 'Listen Remote (-R)',
       cls: 'dir-remote',
-      icon: I.arrowL,
-      title: 'ssh -R — listen on the remote machine, tunnel back to this machine'
+      icon: I.arrowR,
+      title: 'ssh -R — listen on the remote machine and tunnel back to a destination on this machine (expose a local service remotely)'
     };
   }
 
@@ -296,7 +296,10 @@ export class SSHPortsPanelProvider implements WebviewViewProvider, Disposable {
     switch (row.status) {
       case 'running': return { cls: 'ok', text: 'Running' };
       case 'starting': return { cls: 'pending', text: 'Starting…' };
-      case 'error': return { cls: 'err', text: 'Error' };
+      case 'error': {
+        var first = (row.message || '').split('\\n')[0] || 'Error';
+        return { cls: 'err', text: first.length > 20 ? first.slice(0, 19) + '…' : first };
+      }
       default: return { cls: 'off', text: 'Stopped' };
     }
   }
@@ -445,7 +448,7 @@ export class SSHPortsPanelProvider implements WebviewViewProvider, Disposable {
       <col>
       <col style="width:170px">
       <col style="width:170px">
-      <col style="width:100px">
+      <col style="width:130px">
       <col style="width:92px">
     </colgroup>
     <thead>

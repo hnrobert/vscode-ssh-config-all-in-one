@@ -1,5 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
-import type { Disposable, Event, QuickPickItem } from 'vscode'
+import type { Disposable, Event, OutputChannel, QuickPickItem } from 'vscode'
 import type { SSHExplorerProvider } from './explorer'
 import { spawn } from 'node:child_process'
 import { homedir } from 'node:os'
@@ -96,6 +96,7 @@ export class PortForwardManager implements Disposable {
   private readonly entries = new Map<string, Entry>()
   private readonly _onDidChange = new EventEmitter<void>()
   private readonly configListener: Disposable
+  private readonly channel: OutputChannel = window.createOutputChannel('SSH PORTS')
 
   constructor(private readonly provider: SSHExplorerProvider) {
     this.configListener = workspace.onDidChangeConfiguration((e) => {
@@ -164,6 +165,7 @@ export class PortForwardManager implements Disposable {
       clearTimeout(entry.retryTimer)
     entry.proc?.kill()
     this.entries.delete(id)
+    this.log(`stop ${id}`)
     this._onDidChange.fire()
   }
 
@@ -232,7 +234,13 @@ export class PortForwardManager implements Disposable {
   dispose(): void {
     void this.stopAll()
     this.configListener.dispose()
+    this.channel.dispose()
     this._onDidChange.dispose()
+  }
+
+  /** Everything lands in the "SSH PORTS" output channel so failures are diagnosable. */
+  private log(message: string): void {
+    this.channel.appendLine(`[${new Date().toLocaleTimeString()}] ${message}`)
   }
 
   private async spawnProcess(id: string, rule: PortForwardRule, entry: Entry): Promise<void> {
@@ -244,7 +252,7 @@ export class PortForwardManager implements Disposable {
       args = await this.buildArgs(rule)
     }
     catch (err) {
-      this.failEntry(entry, `Failed to resolve SSH arguments: ${errorMessage(err)}`)
+      this.failEntry(id, entry, `Failed to resolve SSH arguments: ${errorMessage(err)}`)
       return
     }
     if (entry.stopping)
@@ -255,12 +263,13 @@ export class PortForwardManager implements Disposable {
       child = spawn('ssh', args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
     }
     catch (err) {
-      this.failEntry(entry, `Failed to spawn ssh: ${errorMessage(err)}`)
+      this.failEntry(id, entry, `Failed to spawn ssh: ${errorMessage(err)}`)
       return
     }
 
     entry.proc = child
     entry.status = 'starting'
+    this.log(`start ${id}: ssh ${args.join(' ')} (pid ${child.pid ?? '?'})`)
     this._onDidChange.fire()
 
     let stderrTail = ''
@@ -281,7 +290,7 @@ export class PortForwardManager implements Disposable {
       if (this.entries.get(id) !== entry || entry.stopping)
         return
       entry.proc = undefined
-      this.failEntry(entry, err.message)
+      this.failEntry(id, entry, err.message)
     })
 
     child.on('exit', (code) => {
@@ -301,6 +310,7 @@ export class PortForwardManager implements Disposable {
       if (entry.attempts <= MAX_ATTEMPTS) {
         entry.status = 'starting'
         entry.message = `ssh exited with code ${code}; retrying (${entry.attempts}/${MAX_ATTEMPTS})`
+        this.log(`retry ${id}: ${entry.message}${stderrTail.trim() ? ` — ${stderrTail.trim()}` : ''}`)
         this._onDidChange.fire()
         entry.retryTimer = setTimeout(() => {
           entry.retryTimer = undefined
@@ -311,14 +321,16 @@ export class PortForwardManager implements Disposable {
       else {
         entry.status = 'error'
         entry.message = stderrTail.trim() || `ssh exited with code ${code}`
+        this.log(`error ${id}: ssh exited with code ${code}${stderrTail.trim() ? ` — ${stderrTail.trim()}` : ''}`)
         this._onDidChange.fire()
       }
     })
   }
 
-  private failEntry(entry: Entry, message: string): void {
+  private failEntry(id: string, entry: Entry, message: string): void {
     entry.status = 'error'
     entry.message = message
+    this.log(`error ${id}: ${message}`)
     this._onDidChange.fire()
   }
 
@@ -424,13 +436,13 @@ export async function promptAndAddPortForward(
   const direction = await window.showQuickPick<DirectionPickItem>(
     [
       {
-        label: 'Local → Remote (ssh -L)',
-        description: 'Listen on this machine, tunnel into the remote network',
+        label: 'Listen Local — ssh -L',
+        description: 'Access a remote service from this machine, e.g. browse the remote port 80 at localhost:8080',
         value: 'local',
       },
       {
-        label: 'Remote → Local (ssh -R)',
-        description: 'Listen on the remote machine, tunnel back to this machine',
+        label: 'Listen Remote — ssh -R',
+        description: 'Expose a local service on the remote machine, e.g. let the remote host reach a local dev server',
         value: 'remote',
       },
     ],
@@ -481,8 +493,8 @@ export async function promptAndAddPortForward(
     return
 
   await commands.executeCommand('vscode-ssh-config-all-in-one.sshPorts.focus')
-  const arrow = rule.direction === 'local' ? '→' : '←'
-  window.showInformationMessage(
-    `Port forward started: localhost:${localPort} ${arrow} ${hostName}:${remotePort}`,
-  )
+  const summary = rule.direction === 'local'
+    ? `localhost:${localPort} → ${hostName}:${remotePort} (ssh -L)`
+    : `${hostName}:${remotePort} → localhost:${localPort} (ssh -R)`
+  window.showInformationMessage(`Port forward started: ${summary}`)
 }
