@@ -202,7 +202,7 @@ export class SSHTunnelsPanelProvider implements WebviewViewProvider, Disposable 
       .cell-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
       .dir-local .dir-ic { color: var(--vscode-charts-blue); }
       .dir-remote .dir-ic { color: var(--vscode-charts-purple); }
-      .dir-ic svg { width: 12px; height: 12px; }
+      .dir-ic svg { width: 12px; height: 12px; display: block; }
       .editable { cursor: text; }
       .editable:hover {
         text-decoration: underline dotted 1px;
