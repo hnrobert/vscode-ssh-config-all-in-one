@@ -43,12 +43,18 @@ export class SSHPortsPanelProvider implements WebviewViewProvider, Disposable {
   }
 
   private pushState(): void {
-    void this.view?.webview.postMessage({ type: 'state', rows: this.manager.getViewRows() })
+    // The webview is destroyed while hidden; posting to it rejects, which is fine.
+    this.view?.webview
+      .postMessage({ type: 'state', rows: this.manager.getViewRows() })
+      .then(undefined, () => {})
   }
 
   private async onMessage(msg: PanelMessage): Promise<void> {
     const id = msg.id ?? ''
     switch (msg.type) {
+      case 'ready':
+        this.pushState()
+        break
       case 'quickAdd':
         await promptAndAddPortForward(this.manager, undefined, msg.port)
         break
@@ -424,6 +430,12 @@ export class SSHPortsPanelProvider implements WebviewViewProvider, Disposable {
       vscode.postMessage({ type: action, id: row.id });
     }
   });
+
+  // Handshake: ask the extension for the current state once this listener is
+  // up. A push sent right after the html is set races the script load and the
+  // message gets dropped (e.g. when the webview is re-resolved after being
+  // hidden), leaving the panel blank until the next state change.
+  vscode.postMessage({ type: 'ready' });
 })();
 `
 
