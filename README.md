@@ -27,6 +27,7 @@
   - Right-click a host in the explorer → **Forward Port...** to pick the direction — **Listen Local (ssh -L)** to bring a remote service to this machine, or **Listen Remote (ssh -R)** to expose a local service on the remote machine — and the ports; the tunnel starts immediately
   - Columns for direction, host, and the local/remote `address:port` on both sides — all editable in place, and a running tunnel restarts automatically with the new arguments
   - Per-row start/stop and open-in-browser, remove, plus a header input that forwards a port in one keystroke
+  - Tunnels follow the VS Code application, not a window: they keep running across `Reload Window` and window closes, all windows see and control the same set of tunnels, and they are cleaned up when VS Code quits
 - **SSH Config Auto-Detection**: Files whose name contains "config" are automatically detected as SSH Config when their content matches SSH Config patterns (e.g. `Host`, `HostName`, `IdentityFile` directives). Can be disabled via `sshConfigAllInOne.detection.enabled`.
 - **Fuzzy Host Search**: The search command supports relevance-ranked matching with extended syntax:
 

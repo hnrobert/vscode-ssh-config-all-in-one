@@ -1,7 +1,9 @@
 import type { ChildProcess } from 'node:child_process'
-import type { Disposable, Event, OutputChannel, QuickPickItem } from 'vscode'
+import type { Disposable, Event, OutputChannel, QuickPickItem, Uri } from 'vscode'
 import type { SSHExplorerProvider } from './explorer'
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { commands, EventEmitter, window, workspace } from 'vscode'
@@ -32,6 +34,8 @@ export interface ForwardViewRow extends PortForwardRule {
 
 interface Entry {
   proc: ChildProcess | undefined
+  /** True when this extension host spawned (and can listen to) the process. */
+  owned: boolean
   stopping: boolean
   attempts: number
   status: ForwardStatus
@@ -40,10 +44,18 @@ interface Entry {
   retryTimer: ReturnType<typeof setTimeout> | undefined
 }
 
+interface TunnelRecord {
+  id: string
+  pid: number
+  startedAt: number
+  ownerPid: number
+}
+
 const CONFIG_KEY = 'portForwards'
 const MAX_ATTEMPTS = 3
 const RETRY_DELAY_MS = 4000
 const RUNNING_GRACE_MS = 1500
+const SYNC_INTERVAL_MS = 5000
 
 export function forwardId(rule: PortForwardRule): string {
   const local = rule.localAddress || 'localhost'
@@ -88,23 +100,63 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  }
+  catch {
+    return false
+  }
+}
+
 /**
- * Keeps persistent `ssh -N -L/-R` processes alive for configured port forward
+ * Keeps persistent `ssh -N -L/-R` tunnels alive for configured port forward
  * rules, restarting crashed tunnels up to {@link MAX_ATTEMPTS} times.
+ *
+ * Tunnels follow the VS Code application process, not the window: ssh is
+ * spawned detached (surviving Reload Window and window closes), every tunnel
+ * gets a record file in the extension's shared global storage so all windows
+ * see and control the same set, and a small watchdog kills the tunnels when
+ * the VS Code main process exits.
  */
 export class PortForwardManager implements Disposable {
   private readonly entries = new Map<string, Entry>()
   private readonly _onDidChange = new EventEmitter<void>()
   private readonly configListener: Disposable
+  private readonly syncTimer: ReturnType<typeof setInterval>
   private readonly channel: OutputChannel = window.createOutputChannel('SSH Tunnels')
+  private readonly tunnelsDir: string
+  private readonly logsDir: string
 
-  constructor(private readonly provider: SSHExplorerProvider) {
+  constructor(
+    private readonly provider: SSHExplorerProvider,
+    storageDir: string,
+    private readonly extensionUri: Uri,
+  ) {
+    const stateDir = join(storageDir, 'sshTunnels')
+    this.tunnelsDir = join(stateDir, 'tunnels')
+    this.logsDir = join(stateDir, 'logs')
+    try {
+      mkdirSync(this.tunnelsDir, { recursive: true })
+      mkdirSync(this.logsDir, { recursive: true })
+    }
+    catch { /* read-only storage: in-memory operation only */ }
+
     this.configListener = workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('sshConfigAllInOne.portForwards')) {
         this.syncWithSettings()
         this._onDidChange.fire()
       }
     })
+
+    this.syncFromDisk()
+    this._onDidChange.fire()
+    this.syncTimer = setInterval(() => {
+      this.syncFromDisk()
+    }, SYNC_INTERVAL_MS)
+
+    this.spawnWatchdog()
   }
 
   get onDidChange(): Event<void> {
@@ -142,6 +194,7 @@ export class PortForwardManager implements Disposable {
     this.stop(id)
     const entry: Entry = {
       proc: undefined,
+      owned: true,
       stopping: false,
       attempts: 0,
       status: 'starting',
@@ -156,14 +209,15 @@ export class PortForwardManager implements Disposable {
 
   stop(id: string): void {
     const entry = this.entries.get(id)
-    if (!entry)
-      return
-    entry.stopping = true
-    if (entry.graceTimer)
-      clearTimeout(entry.graceTimer)
-    if (entry.retryTimer)
-      clearTimeout(entry.retryTimer)
-    entry.proc?.kill()
+    if (entry) {
+      entry.stopping = true
+      if (entry.graceTimer)
+        clearTimeout(entry.graceTimer)
+      if (entry.retryTimer)
+        clearTimeout(entry.retryTimer)
+      entry.proc?.kill()
+    }
+    this.killRecorded(id)
     this.entries.delete(id)
     this.log(`stop ${id}`)
     this._onDidChange.fire()
@@ -231,8 +285,18 @@ export class PortForwardManager implements Disposable {
     return readRules().find(r => forwardId(r) === id)
   }
 
+  /**
+   * Tunnels outlive this window by design (they follow the application
+   * process via the watchdog), so dispose only releases local listeners.
+   */
   dispose(): void {
-    void this.stopAll()
+    clearInterval(this.syncTimer)
+    for (const entry of this.entries.values()) {
+      if (entry.graceTimer)
+        clearTimeout(entry.graceTimer)
+      if (entry.retryTimer)
+        clearTimeout(entry.retryTimer)
+    }
     this.configListener.dispose()
     this.channel.dispose()
     this._onDidChange.dispose()
@@ -241,6 +305,48 @@ export class PortForwardManager implements Disposable {
   /** Everything lands in the "SSH Tunnels" output channel so failures are diagnosable. */
   private log(message: string): void {
     this.channel.appendLine(`[${new Date().toLocaleTimeString()}] ${message}`)
+  }
+
+  private safeName(id: string): string {
+    return createHash('sha1').update(id).digest('hex').slice(0, 16)
+  }
+
+  private recordPath(id: string): string {
+    return join(this.tunnelsDir, `${this.safeName(id)}.json`)
+  }
+
+  private logPath(id: string): string {
+    return join(this.logsDir, `${this.safeName(id)}.log`)
+  }
+
+  private readRecord(id: string): TunnelRecord | undefined {
+    try {
+      return JSON.parse(readFileSync(this.recordPath(id), 'utf8')) as TunnelRecord
+    }
+    catch {
+      return undefined
+    }
+  }
+
+  private readTail(id: string): string {
+    try {
+      return readFileSync(this.logPath(id), 'utf8').trim().slice(-400)
+    }
+    catch {
+      return ''
+    }
+  }
+
+  /** Kills the recorded process for `id` (possibly owned by another window) and drops the record. */
+  private killRecorded(id: string): void {
+    const record = this.readRecord(id)
+    if (record) {
+      try {
+        process.kill(record.pid)
+      }
+      catch { /* already gone */ }
+      rmSync(this.recordPath(id), { force: true })
+    }
   }
 
   private async spawnProcess(id: string, rule: PortForwardRule, entry: Entry): Promise<void> {
@@ -259,23 +365,32 @@ export class PortForwardManager implements Disposable {
       return
 
     let child: ChildProcess
+    let stderrFd: number | undefined
     try {
-      child = spawn('ssh', args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+      // stderr goes to a per-tunnel log file: the process is detached (so it
+      // survives this host) and any window can read the tail for diagnosis.
+      stderrFd = openSync(this.logPath(id), 'w')
+      child = spawn('ssh', args, {
+        stdio: ['ignore', 'ignore', stderrFd],
+        detached: true,
+        windowsHide: true,
+      })
+      child.unref()
     }
     catch (err) {
       this.failEntry(id, entry, `Failed to spawn ssh: ${errorMessage(err)}`)
       return
     }
+    finally {
+      if (stderrFd !== undefined)
+        closeSync(stderrFd)
+    }
 
     entry.proc = child
     entry.status = 'starting'
+    this.writeRecord(id, child.pid)
     this.log(`start ${id}: ssh ${args.join(' ')} (pid ${child.pid ?? '?'})`)
     this._onDidChange.fire()
-
-    let stderrTail = ''
-    child.stderr?.on('data', (chunk) => {
-      stderrTail = `${stderrTail}${String(chunk)}`.slice(-400)
-    })
 
     entry.graceTimer = setTimeout(() => {
       entry.graceTimer = undefined
@@ -301,7 +416,9 @@ export class PortForwardManager implements Disposable {
         clearTimeout(entry.graceTimer)
         entry.graceTimer = undefined
       }
-      if (entry.stopping || code === 0) {
+      // Another window stopped this tunnel (record removed) — not a crash.
+      if (entry.stopping || !this.readRecord(id) || code === 0) {
+        this.killRecorded(id)
         this.entries.delete(id)
         this._onDidChange.fire()
         return
@@ -310,7 +427,7 @@ export class PortForwardManager implements Disposable {
       if (entry.attempts <= MAX_ATTEMPTS) {
         entry.status = 'starting'
         entry.message = `ssh exited with code ${code}; retrying (${entry.attempts}/${MAX_ATTEMPTS})`
-        this.log(`retry ${id}: ${entry.message}${stderrTail.trim() ? ` — ${stderrTail.trim()}` : ''}`)
+        this.log(`retry ${id}: ${entry.message}${this.readTail(id) ? ` — ${this.readTail(id)}` : ''}`)
         this._onDidChange.fire()
         entry.retryTimer = setTimeout(() => {
           entry.retryTimer = undefined
@@ -320,11 +437,19 @@ export class PortForwardManager implements Disposable {
       }
       else {
         entry.status = 'error'
-        entry.message = stderrTail.trim() || `ssh exited with code ${code}`
-        this.log(`error ${id}: ssh exited with code ${code}${stderrTail.trim() ? ` — ${stderrTail.trim()}` : ''}`)
+        entry.message = this.readTail(id) || `ssh exited with code ${code}`
+        this.log(`error ${id}: ssh exited with code ${code}${this.readTail(id) ? ` — ${this.readTail(id)}` : ''}`)
         this._onDidChange.fire()
       }
     })
+  }
+
+  private writeRecord(id: string, pid: number | undefined): void {
+    try {
+      const record: TunnelRecord = { id, pid: pid ?? -1, startedAt: Date.now(), ownerPid: process.pid }
+      writeFileSync(this.recordPath(id), JSON.stringify(record), 'utf8')
+    }
+    catch { /* storage unavailable: tunnel still runs, just undiscoverable */ }
   }
 
   private failEntry(id: string, entry: Entry, message: string): void {
@@ -386,12 +511,112 @@ export class PortForwardManager implements Disposable {
     return file
   }
 
+  /**
+   * Reconciles in-memory state with the on-disk tunnel records: adopt tunnels
+   * started by other windows (or by a previous session before a reload),
+   * notice tunnels stopped elsewhere, and clean up dead records.
+   */
+  private syncFromDisk(): void {
+    let changed = false
+    let files: string[]
+    try {
+      files = readdirSync(this.tunnelsDir)
+    }
+    catch {
+      return
+    }
+
+    for (const file of files) {
+      if (!file.endsWith('.json'))
+        continue
+      let record: TunnelRecord
+      try {
+        record = JSON.parse(readFileSync(join(this.tunnelsDir, file), 'utf8')) as TunnelRecord
+      }
+      catch {
+        continue
+      }
+      const id = record.id
+      if (!id || !pidAlive(record.pid)) {
+        rmSync(join(this.tunnelsDir, file), { force: true })
+        const entry = this.entries.get(id)
+        if (entry && !entry.owned) {
+          this.entries.delete(id)
+          changed = true
+        }
+        continue
+      }
+      if (!this.entries.has(id)) {
+        // Started by another window or by the session before a reload.
+        this.entries.set(id, {
+          proc: undefined,
+          owned: false,
+          stopping: false,
+          attempts: 0,
+          status: 'running',
+          message: undefined,
+          graceTimer: undefined,
+          retryTimer: undefined,
+        })
+        this.log(`adopt ${id} (pid ${record.pid})`)
+        changed = true
+      }
+    }
+
+    if (changed)
+      this._onDidChange.fire()
+  }
+
+  /** Stops tunnels whose rule disappeared from the shared settings. */
   private syncWithSettings(): void {
     const ids = new Set(readRules().map(forwardId))
     for (const id of [...this.entries.keys()]) {
       if (!ids.has(id))
         this.stop(id)
     }
+    let files: string[]
+    try {
+      files = readdirSync(this.tunnelsDir)
+    }
+    catch {
+      return
+    }
+    for (const file of files) {
+      if (!file.endsWith('.json'))
+        continue
+      try {
+        const record = JSON.parse(readFileSync(join(this.tunnelsDir, file), 'utf8')) as TunnelRecord
+        if (record.id && !ids.has(record.id))
+          this.killRecorded(record.id)
+      }
+      catch { /* unreadable record: ignore */ }
+    }
+  }
+
+  /**
+   * Detached helper that watches the VS Code main process and kills all
+   * recorded tunnels once it exits — tunnels follow the application, not the
+   * window. Needs ELECTRON_RUN_AS_NODE because process.execPath is the
+   * Electron helper binary inside VS Code.
+   */
+  private spawnWatchdog(): void {
+    const mainPid = Number(process.env.VSCODE_PID)
+    if (!Number.isInteger(mainPid) || mainPid <= 0)
+      return
+    try {
+      const watchdog = spawn(
+        process.execPath,
+        [join(this.extensionUri.fsPath, 'media', 'sshTunnels', 'watchdog.js'), this.tunnelsDir, String(mainPid)],
+        {
+          detached: true,
+          stdio: 'ignore',
+          env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+          windowsHide: true,
+        },
+      )
+      watchdog.unref()
+    }
+    catch { /* watchdog is best-effort; tunnels would just leak on app quit */ }
   }
 }
 

@@ -39,8 +39,8 @@ export function activate(context: ExtensionContext) {
   disposable.push(treeView)
 
   // SSH Tunnels panel + persistent ssh -N -L/-R tunnels
-  const portForwardManager = new PortForwardManager(explorerProvider)
-  const sshTunnelsPanel = new SSHTunnelsPanelProvider(portForwardManager)
+  const portForwardManager = new PortForwardManager(explorerProvider, context.globalStorageUri.fsPath, context.extensionUri)
+  const sshTunnelsPanel = new SSHTunnelsPanelProvider(portForwardManager, context.extensionUri)
   disposable.push(portForwardManager, sshTunnelsPanel)
   disposable.push(
     window.registerWebviewViewProvider(SSHTunnelsPanelProvider.viewId, sshTunnelsPanel),
