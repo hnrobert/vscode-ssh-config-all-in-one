@@ -195,7 +195,7 @@ export class SSHTunnelsPanelProvider implements WebviewViewProvider, Disposable 
         max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
-        display: inline-flex;
+        display: flex;
         align-items: center;
         gap: 4px;
       }
@@ -221,7 +221,7 @@ export class SSHTunnelsPanelProvider implements WebviewViewProvider, Disposable 
         outline: 1px solid var(--vscode-focusBorder);
       }
       .status {
-        display: inline-flex;
+        display: flex;
         align-items: center;
         gap: 6px;
         height: 26px;
