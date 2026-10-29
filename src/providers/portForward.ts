@@ -1,9 +1,8 @@
-import type { ChildProcess } from 'node:child_process'
 import type { Disposable, Event, OutputChannel, QuickPickItem, Uri } from 'vscode'
 import type { SSHExplorerProvider } from './explorer'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { commands, EventEmitter, window, workspace } from 'vscode'
@@ -33,27 +32,24 @@ export interface ForwardViewRow extends PortForwardRule {
 }
 
 interface Entry {
-  proc: ChildProcess | undefined
-  /** True when this extension host spawned (and can listen to) the process. */
-  owned: boolean
-  stopping: boolean
-  attempts: number
   status: ForwardStatus
   message: string | undefined
   graceTimer: ReturnType<typeof setTimeout> | undefined
-  retryTimer: ReturnType<typeof setTimeout> | undefined
 }
 
 interface TunnelRecord {
   id: string
   pid: number
   startedAt: number
-  ownerPid: number
+  launcherPid?: number
+  /** Retry attempt the launcher is currently on (0 = first try). */
+  attempts?: number
+  /** Set by the launcher after the tunnel gave up retrying. */
+  dead?: boolean
 }
 
 const CONFIG_KEY = 'portForwards'
 const MAX_ATTEMPTS = 3
-const RETRY_DELAY_MS = 4000
 const RUNNING_GRACE_MS = 1500
 const SYNC_INTERVAL_MS = 5000
 
@@ -191,32 +187,73 @@ export class PortForwardManager implements Disposable {
     const rule = this.findRule(id)
     if (!rule)
       return
-    this.stop(id)
-    const entry: Entry = {
-      proc: undefined,
-      owned: true,
-      stopping: false,
-      attempts: 0,
-      status: 'starting',
-      message: undefined,
-      graceTimer: undefined,
-      retryTimer: undefined,
+    const previous = this.entries.get(id)
+    if (previous?.graceTimer)
+      clearTimeout(previous.graceTimer)
+    this.killRecorded(id)
+
+    let args: string[]
+    try {
+      args = await this.buildArgs(rule)
     }
+    catch (err) {
+      const message = `Failed to resolve SSH arguments: ${errorMessage(err)}`
+      this.entries.set(id, { status: 'error', message, graceTimer: undefined })
+      this.log(`error ${id}: ${message}`)
+      this._onDidChange.fire()
+      return
+    }
+
+    const entry: Entry = { status: 'starting', message: undefined, graceTimer: undefined }
     this.entries.set(id, entry)
+    try {
+      // The launcher daemonizes ssh (double detach) so the tunnel escapes
+      // the extension host's process tree — VS Code kills that tree on
+      // Reload Window — and owns retries + the on-disk record.
+      const launcher = spawn(
+        process.execPath,
+        [
+          join(this.extensionUri.fsPath, 'media', 'sshTunnels', 'launcher.js'),
+          this.tunnelsDir,
+          this.safeName(id),
+          id,
+          this.logPath(id),
+          ...args,
+        ],
+        {
+          detached: true,
+          stdio: 'ignore',
+          env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+          windowsHide: true,
+        },
+      )
+      launcher.unref()
+    }
+    catch (err) {
+      entry.status = 'error'
+      entry.message = `Failed to spawn tunnel launcher: ${errorMessage(err)}`
+      this.log(`error ${id}: ${entry.message}`)
+      this._onDidChange.fire()
+      return
+    }
+
+    this.log(`start ${id}: ssh ${args.join(' ')}`)
+    entry.graceTimer = setTimeout(() => {
+      entry.graceTimer = undefined
+      const record = this.readRecord(id)
+      if (this.entries.get(id) === entry && record && pidAlive(record.pid)) {
+        entry.status = 'running'
+        entry.message = undefined
+        this._onDidChange.fire()
+      }
+    }, RUNNING_GRACE_MS)
     this._onDidChange.fire()
-    await this.spawnProcess(id, rule, entry)
   }
 
   stop(id: string): void {
     const entry = this.entries.get(id)
-    if (entry) {
-      entry.stopping = true
-      if (entry.graceTimer)
-        clearTimeout(entry.graceTimer)
-      if (entry.retryTimer)
-        clearTimeout(entry.retryTimer)
-      entry.proc?.kill()
-    }
+    if (entry?.graceTimer)
+      clearTimeout(entry.graceTimer)
     this.killRecorded(id)
     this.entries.delete(id)
     this.log(`stop ${id}`)
@@ -294,8 +331,6 @@ export class PortForwardManager implements Disposable {
     for (const entry of this.entries.values()) {
       if (entry.graceTimer)
         clearTimeout(entry.graceTimer)
-      if (entry.retryTimer)
-        clearTimeout(entry.retryTimer)
     }
     this.configListener.dispose()
     this.channel.dispose()
@@ -340,123 +375,15 @@ export class PortForwardManager implements Disposable {
   /** Kills the recorded process for `id` (possibly owned by another window) and drops the record. */
   private killRecorded(id: string): void {
     const record = this.readRecord(id)
-    if (record) {
+    if (!record)
+      return
+    if (record.pid > 0 && !record.dead) {
       try {
         process.kill(record.pid)
       }
       catch { /* already gone */ }
-      rmSync(this.recordPath(id), { force: true })
     }
-  }
-
-  private async spawnProcess(id: string, rule: PortForwardRule, entry: Entry): Promise<void> {
-    if (entry.stopping)
-      return
-
-    let args: string[]
-    try {
-      args = await this.buildArgs(rule)
-    }
-    catch (err) {
-      this.failEntry(id, entry, `Failed to resolve SSH arguments: ${errorMessage(err)}`)
-      return
-    }
-    if (entry.stopping)
-      return
-
-    let child: ChildProcess
-    let stderrFd: number | undefined
-    try {
-      // stderr goes to a per-tunnel log file: the process is detached (so it
-      // survives this host) and any window can read the tail for diagnosis.
-      stderrFd = openSync(this.logPath(id), 'w')
-      child = spawn('ssh', args, {
-        stdio: ['ignore', 'ignore', stderrFd],
-        detached: true,
-        windowsHide: true,
-      })
-      child.unref()
-    }
-    catch (err) {
-      this.failEntry(id, entry, `Failed to spawn ssh: ${errorMessage(err)}`)
-      return
-    }
-    finally {
-      if (stderrFd !== undefined)
-        closeSync(stderrFd)
-    }
-
-    entry.proc = child
-    entry.status = 'starting'
-    this.writeRecord(id, child.pid)
-    this.log(`start ${id}: ssh ${args.join(' ')} (pid ${child.pid ?? '?'})`)
-    this._onDidChange.fire()
-
-    entry.graceTimer = setTimeout(() => {
-      entry.graceTimer = undefined
-      if (this.entries.get(id) === entry && !entry.stopping) {
-        entry.status = 'running'
-        entry.message = undefined
-        this._onDidChange.fire()
-      }
-    }, RUNNING_GRACE_MS)
-
-    child.on('error', (err) => {
-      if (this.entries.get(id) !== entry || entry.stopping)
-        return
-      entry.proc = undefined
-      this.failEntry(id, entry, err.message)
-    })
-
-    child.on('exit', (code) => {
-      if (this.entries.get(id) !== entry)
-        return
-      entry.proc = undefined
-      if (entry.graceTimer) {
-        clearTimeout(entry.graceTimer)
-        entry.graceTimer = undefined
-      }
-      // Another window stopped this tunnel (record removed) — not a crash.
-      if (entry.stopping || !this.readRecord(id) || code === 0) {
-        this.killRecorded(id)
-        this.entries.delete(id)
-        this._onDidChange.fire()
-        return
-      }
-      entry.attempts += 1
-      if (entry.attempts <= MAX_ATTEMPTS) {
-        entry.status = 'starting'
-        entry.message = `ssh exited with code ${code}; retrying (${entry.attempts}/${MAX_ATTEMPTS})`
-        this.log(`retry ${id}: ${entry.message}${this.readTail(id) ? ` — ${this.readTail(id)}` : ''}`)
-        this._onDidChange.fire()
-        entry.retryTimer = setTimeout(() => {
-          entry.retryTimer = undefined
-          if (this.entries.get(id) === entry && !entry.stopping)
-            void this.spawnProcess(id, rule, entry)
-        }, RETRY_DELAY_MS)
-      }
-      else {
-        entry.status = 'error'
-        entry.message = this.readTail(id) || `ssh exited with code ${code}`
-        this.log(`error ${id}: ssh exited with code ${code}${this.readTail(id) ? ` — ${this.readTail(id)}` : ''}`)
-        this._onDidChange.fire()
-      }
-    })
-  }
-
-  private writeRecord(id: string, pid: number | undefined): void {
-    try {
-      const record: TunnelRecord = { id, pid: pid ?? -1, startedAt: Date.now(), ownerPid: process.pid }
-      writeFileSync(this.recordPath(id), JSON.stringify(record), 'utf8')
-    }
-    catch { /* storage unavailable: tunnel still runs, just undiscoverable */ }
-  }
-
-  private failEntry(id: string, entry: Entry, message: string): void {
-    entry.status = 'error'
-    entry.message = message
-    this.log(`error ${id}: ${message}`)
-    this._onDidChange.fire()
+    rmSync(this.recordPath(id), { force: true })
   }
 
   /**
@@ -537,28 +464,60 @@ export class PortForwardManager implements Disposable {
         continue
       }
       const id = record.id
-      if (!id || !pidAlive(record.pid)) {
-        rmSync(join(this.tunnelsDir, file), { force: true })
+      if (!id)
+        continue
+
+      // The launcher gave up retrying — surface the error until acted on.
+      if (record.dead) {
         const entry = this.entries.get(id)
-        if (entry && !entry.owned) {
-          this.entries.delete(id)
+        if (!entry || entry.status !== 'error') {
+          this.entries.set(id, {
+            status: 'error',
+            message: this.readTail(id) || 'ssh exited after repeated failures',
+            graceTimer: undefined,
+          })
+          this.log(`error ${id}: tunnel gave up after retries`)
           changed = true
         }
         continue
       }
-      if (!this.entries.has(id)) {
+
+      // Between launcher retries — ssh may be down for a few seconds.
+      if ((record.attempts ?? 0) > 0) {
+        if (pidAlive(record.pid) || pidAlive(record.launcherPid ?? -1)) {
+          const message = `ssh exited; retrying (${record.attempts}/${MAX_ATTEMPTS})`
+          const entry = this.entries.get(id)
+          if (!entry || entry.status !== 'starting' || entry.message !== message) {
+            this.entries.set(id, { status: 'starting', message, graceTimer: undefined })
+            this.log(`retry ${id}: ${message}`)
+            changed = true
+          }
+          continue
+        }
+        // Launcher died (e.g. host teardown) before respawning — treat as stopped.
+        rmSync(join(this.tunnelsDir, file), { force: true })
+        if (this.entries.delete(id))
+          changed = true
+        continue
+      }
+
+      if (!pidAlive(record.pid)) {
+        rmSync(join(this.tunnelsDir, file), { force: true })
+        if (this.entries.delete(id))
+          changed = true
+        continue
+      }
+
+      const entry = this.entries.get(id)
+      if (!entry) {
         // Started by another window or by the session before a reload.
-        this.entries.set(id, {
-          proc: undefined,
-          owned: false,
-          stopping: false,
-          attempts: 0,
-          status: 'running',
-          message: undefined,
-          graceTimer: undefined,
-          retryTimer: undefined,
-        })
+        this.entries.set(id, { status: 'running', message: undefined, graceTimer: undefined })
         this.log(`adopt ${id} (pid ${record.pid})`)
+        changed = true
+      }
+      else if (entry.status === 'starting') {
+        entry.status = 'running'
+        entry.message = undefined
         changed = true
       }
     }
