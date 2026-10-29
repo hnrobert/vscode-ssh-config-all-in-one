@@ -50,7 +50,7 @@ interface TunnelRecord {
 
 const CONFIG_KEY = 'portForwards'
 const MAX_ATTEMPTS = 3
-const RUNNING_GRACE_MS = 1500
+const VERIFY_DELAY_MS = 2500
 const SYNC_INTERVAL_MS = 5000
 
 export function forwardId(rule: PortForwardRule): string {
@@ -234,19 +234,33 @@ export class PortForwardManager implements Disposable {
       entry.message = `Failed to spawn tunnel launcher: ${errorMessage(err)}`
       this.log(`error ${id}: ${entry.message}`)
       this._onDidChange.fire()
+      this.notifyFailure(id, entry.message)
       return
     }
 
     this.log(`start ${id}: ssh ${args.join(' ')}`)
     entry.graceTimer = setTimeout(() => {
       entry.graceTimer = undefined
+      if (this.entries.get(id) !== entry)
+        return
+      // ssh deliberately runs without ExitOnForwardFailure (see buildArgs),
+      // so check stderr for complaints about OUR forward and fail loudly.
+      const detail = this.forwardFailureDetail(rule, this.readTail(id))
+      if (detail) {
+        this.log(`error ${id}: ${detail}`)
+        this.killRecorded(id)
+        this.entries.delete(id)
+        this._onDidChange.fire()
+        this.notifyFailure(id, detail)
+        return
+      }
       const record = this.readRecord(id)
-      if (this.entries.get(id) === entry && record && pidAlive(record.pid)) {
+      if (record && pidAlive(record.pid)) {
         entry.status = 'running'
         entry.message = undefined
         this._onDidChange.fire()
       }
-    }, RUNNING_GRACE_MS)
+    }, VERIFY_DELAY_MS)
     this._onDidChange.fire()
   }
 
@@ -342,6 +356,40 @@ export class PortForwardManager implements Disposable {
     this.channel.appendLine(`[${new Date().toLocaleTimeString()}] ${message}`)
   }
 
+  /**
+   * Detects ssh's stderr complaints about OUR forward — not the host's own
+   * config-declared forwards: a local listener that could not bind, or a
+   * remote listener the server refused. Returns the message, or undefined.
+   */
+  private forwardFailureDetail(rule: PortForwardRule, tail: string): string | undefined {
+    if (!tail)
+      return undefined
+    const lines = tail.split('\n')
+    const localPattern = new RegExp(
+      `cannot listen to port: ${rule.localPort}\\b|bind \\[[^\\]]+\\]:${rule.localPort}: Address already in use`,
+    )
+    const remotePattern = new RegExp(`forwarding failed for listen port ${rule.remotePort}\\b`)
+    const idx = lines.findIndex(l => localPattern.test(l) || remotePattern.test(l))
+    if (idx === -1)
+      return undefined
+    const bind = idx > 0 && lines[idx - 1].trim().startsWith('bind [')
+      ? `${lines[idx - 1].trim()} — `
+      : ''
+    return bind + lines[idx].trim()
+  }
+
+  /** Surfaces a tunnel failure as a bottom-right notification. */
+  private notifyFailure(id: string, detail: string): void {
+    const rule = this.findRule(id)
+    const where = rule ? ` on ${rule.hostName}` : ''
+    window.showErrorMessage(`SSH tunnel${where} failed: ${detail}`)
+  }
+
+  private firstMeaningfulLine(tail: string): string {
+    const line = tail.split('\n').find(l => l.trim().length > 0 && !/^Warning: /i.test(l))
+    return line?.trim() ?? ''
+  }
+
   private safeName(id: string): string {
     return createHash('sha1').update(id).digest('hex').slice(0, 16)
   }
@@ -388,14 +436,16 @@ export class PortForwardManager implements Disposable {
 
   /**
    * `ssh -N [-F config] -L/-R ... host` — mirrors what VS Code Remote-SSH
-   * tunnels do: no shell, fail fast when the forward cannot be established,
-   * detect dead connections via keepalives.
+   * tunnels do: no shell, detect dead connections via keepalives.
+   *
+   * Deliberately no `ExitOnForwardFailure=yes`: the host's ssh_config may
+   * declare its own forwards (e.g. `RemoteForward 1080 ...` for a proxy),
+   * and one of those failing must not kill our dedicated tunnel process.
+   * Our own forward is verified from stderr after start instead.
    */
   private async buildArgs(rule: PortForwardRule): Promise<string[]> {
     const args = [
       '-N',
-      '-o',
-      'ExitOnForwardFailure=yes',
       '-o',
       'ConnectTimeout=10',
       '-o',
@@ -471,13 +521,15 @@ export class PortForwardManager implements Disposable {
       if (record.dead) {
         const entry = this.entries.get(id)
         if (!entry || entry.status !== 'error') {
+          const message = this.firstMeaningfulLine(this.readTail(id)) || 'ssh exited after repeated failures'
           this.entries.set(id, {
             status: 'error',
-            message: this.readTail(id) || 'ssh exited after repeated failures',
+            message,
             graceTimer: undefined,
           })
-          this.log(`error ${id}: tunnel gave up after retries`)
+          this.log(`error ${id}: ${message}`)
           changed = true
+          this.notifyFailure(id, message)
         }
         continue
       }
@@ -496,8 +548,10 @@ export class PortForwardManager implements Disposable {
         }
         // Launcher died (e.g. host teardown) before respawning — treat as stopped.
         rmSync(join(this.tunnelsDir, file), { force: true })
-        if (this.entries.delete(id))
+        if (this.entries.delete(id)) {
           changed = true
+          this.notifyFailure(id, 'ssh exited before the tunnel could be re-established')
+        }
         continue
       }
 
