@@ -178,7 +178,7 @@
     else if (dirFilter === 'remote')
       dirBtn.innerHTML = '<span class="dir-ic">' + I.arrowR + '</span>-R';
     else
-      dirBtn.textContent = 'Dir: All';
+      dirBtn.textContent = 'Direction: All';
 
     var runBtn = document.getElementById('runFilter');
     if (runFilter === 'running')
