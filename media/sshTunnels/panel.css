@@ -32,6 +32,34 @@ header {
   font-size: inherit;
 }
 #hostFilter:focus { outline: 1px solid var(--vscode-focusBorder); }
+.filter-btn {
+  all: unset;
+  cursor: pointer;
+  height: 26px;
+  padding: 0 10px;
+  margin-left: 4px;
+  border-radius: 2px;
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  outline: 1px solid var(--vscode-dropdown-border, transparent);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: inherit;
+  font-size: inherit;
+  white-space: nowrap;
+}
+.filter-btn:hover { background: var(--vscode-list-hoverBackground); }
+.filter-btn:focus { outline: 1px solid var(--vscode-focusBorder); }
+.filter-btn svg { width: 12px; height: 12px; display: block; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--vscode-foreground); }
+.sort-ind {
+  display: inline-block;
+  width: 14px;
+  margin-left: 2px;
+  color: var(--vscode-descriptionForeground);
+}
 .icon-btn {
   display: inline-flex;
   align-items: center;

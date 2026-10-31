@@ -11,6 +11,12 @@
   var lastAuto = typeof saved.currentHost === 'string' ? saved.currentHost : null;
   var currentHost = '';
 
+  // Direction / running filters and one-column-at-a-time sorting.
+  var dirFilter = saved.dirFilter === 'local' || saved.dirFilter === 'remote' ? saved.dirFilter : 'all';
+  var runFilter = saved.runFilter === 'running' || saved.runFilter === 'stopped' ? saved.runFilter : 'all';
+  var sortKey = typeof saved.sortKey === 'string' ? saved.sortKey : '';
+  var sortDir = saved.sortDir === -1 ? -1 : 1;
+
   var I = {
     play: '<svg viewBox="0 0 16 16"><path d="M4.5 2.8v10.4L13 8z" fill="currentColor"/></svg>',
     stop: '<svg viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="9" rx="1" fill="currentColor"/></svg>',
@@ -93,10 +99,33 @@
       + '</tr>';
   }
 
+  var statusRank = { running: 0, starting: 1, error: 2, stopped: 3 };
+
+  var comparators = {
+    direction: function (a, b) { return (a.direction === 'local' ? 0 : 1) - (b.direction === 'local' ? 0 : 1); },
+    host: function (a, b) { return a.hostName.localeCompare(b.hostName); },
+    local: function (a, b) { return a.localPort - b.localPort || (a.localAddress || '').localeCompare(b.localAddress || ''); },
+    remote: function (a, b) { return a.remotePort - b.remotePort || (a.remoteAddress || '').localeCompare(b.remoteAddress || ''); },
+    status: function (a, b) { return (statusRank[a.status] ?? 3) - (statusRank[b.status] ?? 3); },
+  };
+
   function visibleRows() {
-    if (!filterHost)
-      return rows;
-    return rows.filter(function (r) { return r.hostName === filterHost; });
+    var out = rows;
+    if (filterHost)
+      out = out.filter(function (r) { return r.hostName === filterHost; });
+    if (dirFilter !== 'all')
+      out = out.filter(function (r) { return r.direction === dirFilter; });
+    if (runFilter !== 'all')
+      out = out.filter(function (r) { return runFilter === 'running' ? r.status === 'running' : r.status !== 'running'; });
+    if (sortKey && comparators[sortKey]) {
+      var cmp = comparators[sortKey];
+      out = out.slice().sort(function (a, b) { return sortDir * cmp(a, b); });
+    }
+    return out;
+  }
+
+  function anyFilterActive() {
+    return !!filterHost || dirFilter !== 'all' || runFilter !== 'all';
   }
 
   function rebuildFilterOptions() {
@@ -123,16 +152,55 @@
   }
 
   function persist() {
-    vscode.setState({ filterHost: filterHost, pinned: pinned, currentHost: currentHost });
+    vscode.setState({
+      filterHost: filterHost,
+      pinned: pinned,
+      currentHost: currentHost,
+      dirFilter: dirFilter,
+      runFilter: runFilter,
+      sortKey: sortKey,
+      sortDir: sortDir,
+    });
+  }
+
+  function updateSortIndicators() {
+    var inds = document.querySelectorAll('th[data-sort] .sort-ind');
+    for (var i = 0; i < inds.length; i++) {
+      var th = inds[i].closest('th');
+      inds[i].textContent = th && th.dataset.sort === sortKey ? (sortDir === 1 ? '↑' : '↓') : '';
+    }
+  }
+
+  function updateFilterButtons() {
+    var dirBtn = document.getElementById('dirFilter');
+    if (dirFilter === 'local')
+      dirBtn.innerHTML = '<span class="dir-ic">' + I.arrowL + '</span>-L';
+    else if (dirFilter === 'remote')
+      dirBtn.innerHTML = '<span class="dir-ic">' + I.arrowR + '</span>-R';
+    else
+      dirBtn.textContent = 'Dir: All';
+
+    var runBtn = document.getElementById('runFilter');
+    if (runFilter === 'running')
+      runBtn.textContent = 'Running';
+    else if (runFilter === 'stopped')
+      runBtn.textContent = 'Not Running';
+    else
+      runBtn.textContent = 'Status: All';
   }
 
   function render() {
     document.getElementById('tbody').innerHTML = visibleRows().map(rowHtml).join('');
     var empty = document.getElementById('empty');
-    empty.hidden = visibleRows().length > 0;
-    empty.textContent = filterHost
-      ? 'No port forwards for ' + filterHost + '. Use the + button to add one.'
-      : 'No port forwards. Use the + button or right-click a host in the SSH Config explorer.';
+    var shown = visibleRows();
+    empty.hidden = shown.length > 0;
+    if (rows.length > 0 && anyFilterActive())
+      empty.textContent = 'No tunnels match the current filters.';
+    else if (filterHost)
+      empty.textContent = 'No port forwards for ' + filterHost + '. Use the + button to add one.';
+    else
+      empty.textContent = 'No port forwards. Use the + button or right-click a host in the SSH Config explorer.';
+    updateSortIndicators();
   }
 
   function startEdit(td, row, field) {
@@ -212,6 +280,42 @@
     render();
   });
 
+  document.getElementById('dirFilter').addEventListener('click', function () {
+    dirFilter = dirFilter === 'all' ? 'local' : dirFilter === 'local' ? 'remote' : 'all';
+    updateFilterButtons();
+    persist();
+    render();
+  });
+
+  document.getElementById('runFilter').addEventListener('click', function () {
+    runFilter = runFilter === 'all' ? 'running' : runFilter === 'running' ? 'stopped' : 'all';
+    updateFilterButtons();
+    persist();
+    render();
+  });
+
+  // Click a header to cycle: ascending → descending → off. Only one column
+  // is sorted at a time — enabling one resets the others.
+  document.querySelector('thead').addEventListener('click', function (e) {
+    var th = e.target.closest('th[data-sort]');
+    if (!th)
+      return;
+    var key = th.dataset.sort;
+    if (sortKey !== key) {
+      sortKey = key;
+      sortDir = 1;
+    }
+    else if (sortDir === 1) {
+      sortDir = -1;
+    }
+    else {
+      sortKey = '';
+      sortDir = 1;
+    }
+    persist();
+    render();
+  });
+
   document.getElementById('tbody').addEventListener('click', function (e) {
     var el = e.target.closest('[data-action]');
     if (!el) {
@@ -232,6 +336,8 @@
       vscode.postMessage({ type: action, id: row.id });
     }
   });
+
+  updateFilterButtons();
 
   // Handshake: ask the extension for the current state once this listener is
   // up. A push sent right after the webview loads races the script load and

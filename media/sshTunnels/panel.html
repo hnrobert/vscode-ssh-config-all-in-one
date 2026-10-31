@@ -8,6 +8,8 @@
 <body>
 <header>
   <select id="hostFilter" class="host-filter" title="Filter tunnels by host"></select>
+  <button id="dirFilter" class="filter-btn" title="Direction filter — click to cycle: All → Listen Local (-L) → Listen Remote (-R)"></button>
+  <button id="runFilter" class="filter-btn" title="Running filter — click to cycle: All → Running → Not running"></button>
   <button id="addBtn" class="icon-btn" title="Forward a Port">
     <svg viewBox="0 0 16 16" fill="none"><path d="M8 2.5v11M2.5 8h11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
   </button>
@@ -24,11 +26,11 @@
     </colgroup>
     <thead>
       <tr>
-        <th>Direction</th>
-        <th>Host</th>
-        <th>Local Address</th>
-        <th>Remote Address</th>
-        <th>Status</th>
+        <th class="sortable" data-sort="direction">Direction<span class="sort-ind"></span></th>
+        <th class="sortable" data-sort="host">Host<span class="sort-ind"></span></th>
+        <th class="sortable" data-sort="local">Local Address<span class="sort-ind"></span></th>
+        <th class="sortable" data-sort="remote">Remote Address<span class="sort-ind"></span></th>
+        <th class="sortable" data-sort="status">Status<span class="sort-ind"></span></th>
         <th></th>
       </tr>
     </thead>
