@@ -17,6 +17,9 @@
   var sortKey = typeof saved.sortKey === 'string' ? saved.sortKey : '';
   var sortDir = saved.sortDir === -1 ? -1 : 1;
 
+  // Free-text search over host / addresses / ports. Transient — not persisted.
+  var searchQuery = '';
+
   var I = {
     play: '<svg viewBox="0 0 16 16"><path d="M4.5 2.8v10.4L13 8z" fill="currentColor"/></svg>',
     stop: '<svg viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="9" rx="1" fill="currentColor"/></svg>',
@@ -109,6 +112,17 @@
     status: function (a, b) { return (statusRank[a.status] ?? 3) - (statusRank[b.status] ?? 3); },
   };
 
+  function matchesSearch(row) {
+    if (!searchQuery)
+      return true;
+    var q = searchQuery.toLowerCase();
+    var local = ((row.localAddress || 'localhost') + ':' + row.localPort).toLowerCase();
+    var remote = ((row.remoteAddress || 'localhost') + ':' + row.remotePort).toLowerCase();
+    return row.hostName.toLowerCase().indexOf(q) !== -1
+      || local.indexOf(q) !== -1
+      || remote.indexOf(q) !== -1;
+  }
+
   function visibleRows() {
     var out = rows;
     if (filterHost)
@@ -117,6 +131,8 @@
       out = out.filter(function (r) { return r.direction === dirFilter; });
     if (runFilter !== 'all')
       out = out.filter(function (r) { return runFilter === 'running' ? r.status === 'running' : r.status !== 'running'; });
+    if (searchQuery)
+      out = out.filter(matchesSearch);
     if (sortKey && comparators[sortKey]) {
       var cmp = comparators[sortKey];
       out = out.slice().sort(function (a, b) { return sortDir * cmp(a, b); });
@@ -125,7 +141,7 @@
   }
 
   function anyFilterActive() {
-    return !!filterHost || dirFilter !== 'all' || runFilter !== 'all';
+    return !!filterHost || dirFilter !== 'all' || runFilter !== 'all' || !!searchQuery;
   }
 
   function rebuildFilterOptions() {
@@ -271,6 +287,11 @@
 
   document.getElementById('addBtn').addEventListener('click', function () {
     vscode.postMessage({ type: 'quickAdd', host: filterHost || undefined });
+  });
+
+  document.getElementById('searchInput').addEventListener('input', function () {
+    searchQuery = document.getElementById('searchInput').value.trim();
+    render();
   });
 
   document.getElementById('hostFilter').addEventListener('change', function () {
