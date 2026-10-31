@@ -354,7 +354,9 @@
     if (action === 'edit') {
       startEdit(el, row, el.dataset.field);
     } else {
-      vscode.postMessage({ type: action, id: row.id });
+      // data-action names match the extension's message types, except the
+      // globe button, whose handler is registered as 'openBrowser'.
+      vscode.postMessage({ type: action === 'browser' ? 'openBrowser' : action, id: row.id });
     }
   });
 
