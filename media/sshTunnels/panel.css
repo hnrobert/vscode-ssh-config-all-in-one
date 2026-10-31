@@ -18,18 +18,20 @@ header {
   flex: none;
   border-bottom: 1px solid var(--vscode-panel-border);
 }
-#portInput {
-  width: 150px;
+#hostFilter {
+  min-width: 180px;
+  max-width: 280px;
   height: 26px;
-  padding: 0 8px;
+  padding: 0 6px;
   border: none;
   border-radius: 2px;
-  background: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
-  outline: 1px solid transparent;
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  outline: 1px solid var(--vscode-dropdown-border, transparent);
+  font-family: inherit;
+  font-size: inherit;
 }
-#portInput:focus { outline: 1px solid var(--vscode-focusBorder); }
-#portInput::placeholder { color: var(--vscode-input-placeholderForeground); }
+#hostFilter:focus { outline: 1px solid var(--vscode-focusBorder); }
 .icon-btn {
   display: inline-flex;
   align-items: center;

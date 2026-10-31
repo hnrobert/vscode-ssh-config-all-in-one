@@ -3,6 +3,14 @@
   var vscode = acquireVsCodeApi();
   var rows = [];
 
+  // Host filter. Follows the window's current SSH remote automatically;
+  // a manual pick is kept until the remote context changes again.
+  var saved = vscode.getState() || {};
+  var filterHost = typeof saved.filterHost === 'string' ? saved.filterHost : '';
+  var pinned = !!saved.pinned && !!filterHost;
+  var lastAuto = typeof saved.currentHost === 'string' ? saved.currentHost : null;
+  var currentHost = '';
+
   var I = {
     play: '<svg viewBox="0 0 16 16"><path d="M4.5 2.8v10.4L13 8z" fill="currentColor"/></svg>',
     stop: '<svg viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="9" rx="1" fill="currentColor"/></svg>',
@@ -85,9 +93,46 @@
       + '</tr>';
   }
 
+  function visibleRows() {
+    if (!filterHost)
+      return rows;
+    return rows.filter(function (r) { return r.hostName === filterHost; });
+  }
+
+  function rebuildFilterOptions() {
+    var seen = {};
+    var hosts = [];
+    rows.forEach(function (r) {
+      if (!seen[r.hostName]) { seen[r.hostName] = true; hosts.push(r.hostName); }
+    });
+    if (currentHost && !seen[currentHost])
+      hosts.push(currentHost);
+    hosts.sort();
+    var select = document.getElementById('hostFilter');
+    var options = ['<option value="">All Hosts</option>'].concat(hosts.map(function (h) {
+      return '<option value="' + esc(h) + '">' + esc(h) + '</option>';
+    }));
+    select.innerHTML = options.join('');
+    if (!filterHost || seen[filterHost] || filterHost === currentHost)
+      select.value = filterHost;
+    else {
+      filterHost = '';
+      pinned = false;
+      select.value = '';
+    }
+  }
+
+  function persist() {
+    vscode.setState({ filterHost: filterHost, pinned: pinned, currentHost: currentHost });
+  }
+
   function render() {
-    document.getElementById('tbody').innerHTML = rows.map(rowHtml).join('');
-    document.getElementById('empty').hidden = rows.length > 0;
+    document.getElementById('tbody').innerHTML = visibleRows().map(rowHtml).join('');
+    var empty = document.getElementById('empty');
+    empty.hidden = visibleRows().length > 0;
+    empty.textContent = filterHost
+      ? 'No port forwards for ' + filterHost + '. Use the + button to add one.'
+      : 'No port forwards. Use the + button or right-click a host in the SSH Config explorer.';
   }
 
   function startEdit(td, row, field) {
@@ -142,22 +187,29 @@
     var msg = event.data;
     if (msg && msg.type === 'state') {
       rows = msg.rows;
+      currentHost = msg.currentHost || '';
+      // A changed remote context (connect/disconnect) re-enables auto-follow.
+      if (currentHost !== lastAuto) {
+        lastAuto = currentHost;
+        pinned = false;
+      }
+      if (!pinned)
+        filterHost = currentHost;
+      rebuildFilterOptions();
+      persist();
       render();
     }
   });
 
   document.getElementById('addBtn').addEventListener('click', function () {
-    vscode.postMessage({ type: 'quickAdd' });
+    vscode.postMessage({ type: 'quickAdd', host: filterHost || undefined });
   });
 
-  var portInput = document.getElementById('portInput');
-  portInput.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Enter') {
-      var v = portInput.value.trim();
-      var port = /^\d+$/.test(v) ? Number(v) : undefined;
-      vscode.postMessage({ type: 'quickAdd', port: port });
-      portInput.value = '';
-    }
+  document.getElementById('hostFilter').addEventListener('change', function () {
+    pinned = true;
+    filterHost = document.getElementById('hostFilter').value;
+    persist();
+    render();
   });
 
   document.getElementById('tbody').addEventListener('click', function (e) {

@@ -2,6 +2,7 @@ import type { Disposable, Webview, WebviewView, WebviewViewProvider } from 'vsco
 import type { PortForwardManager } from './portForward'
 import { env, Uri, window, workspace } from 'vscode'
 import { parseSSHConfig } from '../utils/sshConfig'
+import { getCurrentSSHHost } from '../utils/sshDetection'
 import { promptAndAddPortForward } from './portForward'
 
 interface PanelMessage {
@@ -10,6 +11,7 @@ interface PanelMessage {
   field?: 'local' | 'remote'
   address?: string
   port?: number
+  host?: string
 }
 
 /**
@@ -52,10 +54,17 @@ export class SSHTunnelsPanelProvider implements WebviewViewProvider, Disposable 
   }
 
   private pushState(): void {
-    // The webview is destroyed while hidden; posting to it rejects, which is fine.
-    this.view?.webview
-      .postMessage({ type: 'state', rows: this.manager.getViewRows() })
-      .then(undefined, () => {})
+    const view = this.view
+    if (!view)
+      return
+    void (async () => {
+      // The webview auto-filters to the window's current SSH remote, if any.
+      const currentHost = await getCurrentSSHHost()
+      // The webview is destroyed while hidden; posting to it rejects, which is fine.
+      view.webview
+        .postMessage({ type: 'state', rows: this.manager.getViewRows(), currentHost: currentHost ?? '' })
+        .then(undefined, () => {})
+    })()
   }
 
   private async onMessage(msg: PanelMessage): Promise<void> {
@@ -65,7 +74,7 @@ export class SSHTunnelsPanelProvider implements WebviewViewProvider, Disposable 
         this.pushState()
         break
       case 'quickAdd':
-        await promptAndAddPortForward(this.manager, undefined, msg.port)
+        await promptAndAddPortForward(this.manager, msg.host)
         break
       case 'toggle':
         this.manager.toggle(id)
