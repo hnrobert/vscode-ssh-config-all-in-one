@@ -52,16 +52,27 @@
     };
   }
 
-  function addrTitles(row) {
+  // A tunnel listens on one side (just a port — ssh binds loopback; bind
+  // addresses were dropped from the rule model) and delivers to a full
+  // destination host:port resolved on the other machine.
+  function listenDisplay(row) {
+    return String(row.listenPort);
+  }
+
+  function destDisplay(row) {
+    return (row.destHost || 'localhost') + ':' + row.destPort;
+  }
+
+  function cellTitles(row) {
     if (row.direction === 'local') {
       return {
-        local: 'Bind address on this machine. Click to edit host:port',
-        remote: 'Destination on the remote network, resolved on the remote machine. Click to edit host:port'
+        listen: 'Port to listen on, on this machine. Click to edit the port',
+        dest: 'Destination resolved on the remote machine — full host:port. Click to edit'
       };
     }
     return {
-      local: 'Destination on this machine. Click to edit host:port',
-      remote: 'Bind address on the remote machine (sshd GatewayPorts may restrict this). Click to edit host:port'
+      listen: 'Port to listen on, on the remote machine (exposing it beyond loopback needs sshd GatewayPorts). Click to edit the port',
+      dest: 'Destination on this machine — full host:port. Click to edit'
     };
   }
 
@@ -79,11 +90,11 @@
 
   function rowHtml(row) {
     var d = dirInfo(row);
-    var t = addrTitles(row);
+    var t = cellTitles(row);
     var s = statusInfo(row);
     var active = row.status === 'running' || row.status === 'starting';
-    var local = (row.localAddress || 'localhost') + ':' + row.localPort;
-    var remote = (row.remoteAddress || 'localhost') + ':' + row.remotePort;
+    var listen = listenDisplay(row);
+    var dest = destDisplay(row);
     var actions = [];
     if (row.direction === 'local') {
       actions.push('<button class="icon-btn" data-action="browser" title="Open in Browser">' + I.globe + '</button>');
@@ -95,8 +106,8 @@
     return '<tr data-id="' + esc(row.id) + '" title="' + esc(row.message || d.title) + '">'
       + '<td><button class="cell-btn ' + d.cls + '" data-action="direction" title="' + esc(d.title) + '"><span class="dir-ic">' + d.icon + '</span>' + d.label + '</button></td>'
       + '<td><button class="cell-btn" data-action="host" title="Change the SSH host">' + esc(row.hostName) + '</button></td>'
-      + '<td class="editable" data-action="edit" data-field="local" title="' + esc(t.local) + '">' + esc(local) + '</td>'
-      + '<td class="editable" data-action="edit" data-field="remote" title="' + esc(t.remote) + '">' + esc(remote) + '</td>'
+      + '<td class="editable" data-action="edit" data-field="listen" title="' + esc(t.listen) + '">' + esc(listen) + '</td>'
+      + '<td class="editable" data-action="edit" data-field="dest" title="' + esc(t.dest) + '">' + esc(dest) + '</td>'
       + '<td><span class="status ' + s.cls + '" title="' + esc(row.message || s.text) + '"><span class="dot"></span>' + s.text + '</span></td>'
       + '<td><span class="row-actions">' + actions.join('') + '</span></td>'
       + '</tr>';
@@ -107,8 +118,8 @@
   var comparators = {
     direction: function (a, b) { return (a.direction === 'local' ? 0 : 1) - (b.direction === 'local' ? 0 : 1); },
     host: function (a, b) { return a.hostName.localeCompare(b.hostName); },
-    local: function (a, b) { return a.localPort - b.localPort || (a.localAddress || '').localeCompare(b.localAddress || ''); },
-    remote: function (a, b) { return a.remotePort - b.remotePort || (a.remoteAddress || '').localeCompare(b.remoteAddress || ''); },
+    listen: function (a, b) { return a.listenPort - b.listenPort; },
+    destination: function (a, b) { return a.destPort - b.destPort || (a.destHost || '').localeCompare(b.destHost || ''); },
     status: function (a, b) { return (statusRank[a.status] ?? 3) - (statusRank[b.status] ?? 3); },
   };
 
@@ -116,11 +127,9 @@
     if (!searchQuery)
       return true;
     var q = searchQuery.toLowerCase();
-    var local = ((row.localAddress || 'localhost') + ':' + row.localPort).toLowerCase();
-    var remote = ((row.remoteAddress || 'localhost') + ':' + row.remotePort).toLowerCase();
     return row.hostName.toLowerCase().indexOf(q) !== -1
-      || local.indexOf(q) !== -1
-      || remote.indexOf(q) !== -1;
+      || listenDisplay(row).indexOf(q) !== -1
+      || destDisplay(row).toLowerCase().indexOf(q) !== -1;
   }
 
   function visibleRows() {
@@ -223,10 +232,9 @@
     if (td.querySelector('input')) {
       return;
     }
-    var isLocal = field === 'local';
-    var origAddr = isLocal ? (row.localAddress || 'localhost') : (row.remoteAddress || 'localhost');
-    var origPort = isLocal ? row.localPort : row.remotePort;
-    var orig = origAddr + ':' + origPort;
+    var isListen = field === 'listen';
+    var origAddr = row.destHost || 'localhost';
+    var orig = isListen ? String(row.listenPort) : origAddr + ':' + row.destPort;
     var input = document.createElement('input');
     input.className = 'cell-input';
     input.value = orig;
@@ -241,6 +249,14 @@
       }
       done = true;
       var v = input.value.trim();
+      if (isListen) {
+        // The Listen side is just a port number.
+        if (v && v !== orig && /^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 65535)
+          vscode.postMessage({ type: 'edit', id: row.id, field: 'listen', port: Number(v) });
+        else
+          render();
+        return;
+      }
       var addr = origAddr;
       var port = '';
       var ci = v.lastIndexOf(':');
@@ -251,7 +267,7 @@
         port = v;
       }
       if (v && v !== orig && /^\d+$/.test(port) && Number(port) >= 1 && Number(port) <= 65535) {
-        vscode.postMessage({ type: 'edit', id: row.id, field: field, address: addr || 'localhost', port: Number(port) });
+        vscode.postMessage({ type: 'edit', id: row.id, field: 'dest', host: addr || 'localhost', port: Number(port) });
       } else {
         render();
       }

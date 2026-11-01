@@ -16,12 +16,12 @@ export type ForwardStatus = 'stopped' | 'starting' | 'running' | 'error'
 export interface PortForwardRule {
   hostName: string
   direction: ForwardDirection
-  /** For -L: local bind address. For -R: destination host on this machine. */
-  localAddress: string
-  localPort: number
-  /** For -L: destination host resolved on the remote machine. For -R: bind address on the remote machine. */
-  remoteAddress: string
-  remotePort: number
+  /** Port the tunnel listens on (-L: this machine; -R: the remote machine). */
+  listenPort: number
+  /** Destination host of the forwarded traffic, resolved on the other machine. */
+  destHost: string
+  /** Destination port of the forwarded traffic. */
+  destPort: number
 }
 
 /** A rule merged with its runtime state, as consumed by the SSH Tunnels panel. */
@@ -54,32 +54,45 @@ const VERIFY_DELAY_MS = 2500
 const SYNC_INTERVAL_MS = 5000
 
 export function forwardId(rule: PortForwardRule): string {
-  const local = rule.localAddress || 'localhost'
-  const remote = rule.remoteAddress || 'localhost'
-  return `${rule.direction}://${local}:${rule.localPort}=>${rule.hostName}:${remote}:${rule.remotePort}`
+  return `${rule.direction}://${rule.listenPort}=>${rule.hostName}:${rule.destHost}:${rule.destPort}`
 }
 
 function normalizeRule(raw: unknown): PortForwardRule | undefined {
   if (typeof raw !== 'object' || raw === null)
     return undefined
-  const r = raw as Partial<PortForwardRule>
+  const r = raw as Record<string, unknown>
   if (typeof r.hostName !== 'string' || !r.hostName.trim())
     return undefined
   if (r.direction !== 'local' && r.direction !== 'remote')
     return undefined
-  const localPort = Number(r.localPort)
-  const remotePort = Number(r.remotePort)
-  if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65535)
+
+  let listenPort: unknown
+  let destPort: unknown
+  let destHost: unknown
+  if (r.listenPort !== undefined) {
+    listenPort = r.listenPort
+    destPort = r.destPort
+    destHost = r.destHost
+  }
+  else {
+    // Legacy shape: the address fields doubled as bind address (listen side)
+    // and destination host (destination side), swapped by direction.
+    listenPort = r.direction === 'local' ? r.localPort : r.remotePort
+    destPort = r.direction === 'local' ? r.remotePort : r.localPort
+    destHost = r.direction === 'local' ? r.remoteAddress : r.localAddress
+  }
+  const listen = Number(listenPort)
+  const dest = Number(destPort)
+  if (!Number.isInteger(listen) || listen < 1 || listen > 65535)
     return undefined
-  if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535)
+  if (!Number.isInteger(dest) || dest < 1 || dest > 65535)
     return undefined
   return {
     hostName: r.hostName.trim(),
     direction: r.direction,
-    localAddress: typeof r.localAddress === 'string' && r.localAddress.trim() ? r.localAddress.trim() : 'localhost',
-    localPort,
-    remoteAddress: typeof r.remoteAddress === 'string' && r.remoteAddress.trim() ? r.remoteAddress.trim() : 'localhost',
-    remotePort,
+    listenPort: listen,
+    destHost: typeof destHost === 'string' && destHost.trim() ? destHost.trim() : 'localhost',
+    destPort: dest,
   }
 }
 
@@ -366,9 +379,9 @@ export class PortForwardManager implements Disposable {
       return undefined
     const lines = tail.split('\n')
     const localPattern = new RegExp(
-      `cannot listen to port: ${rule.localPort}\\b|bind \\[[^\\]]+\\]:${rule.localPort}: Address already in use`,
+      `cannot listen to port: ${rule.listenPort}\\b|bind \\[[^\\]]+\\]:${rule.listenPort}: Address already in use`,
     )
-    const remotePattern = new RegExp(`forwarding failed for listen port ${rule.remotePort}\\b`)
+    const remotePattern = new RegExp(`forwarding failed for listen port ${rule.listenPort}\\b`)
     const idx = lines.findIndex(l => localPattern.test(l) || remotePattern.test(l))
     if (idx === -1)
       return undefined
@@ -458,12 +471,8 @@ export class PortForwardManager implements Disposable {
     if (configFile)
       args.push('-F', configFile)
 
-    const local = rule.localAddress || 'localhost'
-    const remote = rule.remoteAddress || 'localhost'
-    if (rule.direction === 'local')
-      args.push('-L', `${local}:${rule.localPort}:${remote}:${rule.remotePort}`)
-    else
-      args.push('-R', `${remote}:${rule.remotePort}:${local}:${rule.localPort}`)
+    const dest = `${rule.destHost || 'localhost'}:${rule.destPort}`
+    args.push(rule.direction === 'local' ? '-L' : '-R', `${rule.listenPort}:${dest}`)
 
     args.push(rule.hostName)
     return args
@@ -721,10 +730,9 @@ export async function promptAndAddPortForward(
   const rule: PortForwardRule = {
     hostName,
     direction: direction.value,
-    localAddress: 'localhost',
-    localPort,
-    remoteAddress: 'localhost',
-    remotePort,
+    listenPort: localPort,
+    destHost: 'localhost',
+    destPort: remotePort,
   }
   const id = await manager.addRule(rule, true)
   if (!id)
@@ -732,7 +740,7 @@ export async function promptAndAddPortForward(
 
   await commands.executeCommand('vscode-ssh-config-all-in-one.sshTunnels.focus')
   const summary = rule.direction === 'local'
-    ? `localhost:${localPort} → ${hostName}:${remotePort} (ssh -L)`
-    : `${hostName}:${remotePort} → localhost:${localPort} (ssh -R)`
+    ? `localhost:${rule.listenPort} → ${rule.destHost}:${rule.destPort} (ssh -L)`
+    : `${hostName}:${rule.listenPort} → ${rule.destHost}:${rule.destPort} (ssh -R)`
   window.showInformationMessage(`Port forward started: ${summary}`)
 }

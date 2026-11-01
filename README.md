@@ -25,7 +25,7 @@
   - ![quick-connect-code-lens-demo](docs/images/quick-connect-code-lens-demo.png)
 - **SSH Port Forwarding (SSH Tunnels panel)**: A bottom-panel view alongside the built-in *Ports*, styled after it. Each row is a persistent `ssh -N -L/-R` tunnel kept alive with automatic retries — the same effect as the forwards VS Code sets up once you SSH into a machine, but without opening a remote window:
   - Right-click a host in the explorer → **Forward Port...** to pick the direction — **Listen Local (ssh -L)** to bring a remote service to this machine, or **Listen Remote (ssh -R)** to expose a local service on the remote machine — and the ports; the tunnel starts immediately
-  - Columns for direction, host, and the local/remote `address:port` on both sides — all editable in place, and a running tunnel restarts automatically with the new arguments
+  - Columns for direction, host, and the two sides of the tunnel — **Listen** (the port to listen on; ssh binds loopback) and **Destination** (full `host:port`, resolved on the other machine) — all editable in place, and a running tunnel restarts automatically with the new arguments
   - Per-row start/stop and open-in-browser, remove, plus a header input that forwards a port in one keystroke
   - Tunnels follow the VS Code application, not a window: they keep running across `Reload Window` and window closes, all windows see and control the same set of tunnels, and they are cleaned up when VS Code quits
 - **SSH Config Auto-Detection**: Files whose name contains "config" are automatically detected as SSH Config when their content matches SSH Config patterns (e.g. `Host`, `HostName`, `IdentityFile` directives). Can be disabled via `sshConfigAllInOne.detection.enabled`.
@@ -94,7 +94,7 @@ Host example
 - `sshConfigAllInOne.search.mode`: Search mode for the host explorer — `fuzzy` (multi-token, quoted phrases, prefix/suffix/exclude operators, relevance ranking) or `simple` (original substring match). (Default: `fuzzy`)
 - `sshConfigAllInOne.search.onAccept`: What happens when you select a host from the search results — `revealInExplorer` (reveal in the panel), `openConfig` (open the config file at the host definition), or `both`. (Default: `revealInExplorer`)
 - `sshConfigAllInOne.copyKey.windowsUserType`: When copying a public key to a Windows host, how to treat the target account — `ask` (prompt each time), `regular` (always copy to `~/.ssh/authorized_keys`), or `admin` (always treat as administrator and choose the destination). Administrators read keys from `C:\ProgramData\ssh\administrators_authorized_keys` by default, not the user home. (Default: `ask`)
-- `sshConfigAllInOne.portForwards`: SSH port forwarding rules shown in the SSH Tunnels panel — each entry has `hostName`, `direction` (`local` = `ssh -L`, `remote` = `ssh -R`), `localAddress`/`localPort`, and `remoteAddress`/`remotePort`. Managed by the panel and the *Forward Port...* context-menu action. (Default: `[]`)
+- `sshConfigAllInOne.portForwards`: SSH port forwarding rules shown in the SSH Tunnels panel — each entry has `hostName`, `direction` (`local` = `ssh -L`, `remote` = `ssh -R`), `listenPort` (the side that listens; ssh binds loopback), and `destHost`/`destPort` (full destination, resolved on the other machine). Managed by the panel and the *Forward Port...* context-menu action. (Default: `[]`)
 
 ## Tips
 

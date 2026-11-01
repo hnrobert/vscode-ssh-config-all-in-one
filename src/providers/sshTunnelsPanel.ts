@@ -8,8 +8,7 @@ import { promptAndAddPortForward } from './portForward'
 interface PanelMessage {
   type: string
   id?: string
-  field?: 'local' | 'remote'
-  address?: string
+  field?: 'listen' | 'dest'
   port?: number
   host?: string
 }
@@ -91,9 +90,9 @@ export class SSHTunnelsPanelProvider implements WebviewViewProvider, Disposable 
       case 'edit':
         if (!msg.field)
           break
-        await this.manager.updateRule(id, msg.field === 'local'
-          ? { localAddress: msg.address || 'localhost', localPort: Number(msg.port) }
-          : { remoteAddress: msg.address || 'localhost', remotePort: Number(msg.port) })
+        await this.manager.updateRule(id, msg.field === 'listen'
+          ? { listenPort: Number(msg.port) }
+          : { destHost: msg.host || 'localhost', destPort: Number(msg.port) })
         break
       case 'openBrowser':
         await this.openInBrowser(id)
@@ -115,8 +114,9 @@ export class SSHTunnelsPanelProvider implements WebviewViewProvider, Disposable 
     const row = this.manager.getViewRows().find(r => r.id === id)
     if (!row)
       return
-    const host = !row.localAddress || row.localAddress === '0.0.0.0' ? 'localhost' : row.localAddress
-    await env.openExternal(Uri.parse(`http://${host}:${row.localPort}/`))
+    // The globe only shows on -L rows, where ssh listens on this machine
+    // (loopback, since bind addresses were dropped from the rule model).
+    await env.openExternal(Uri.parse(`http://localhost:${row.listenPort}/`))
   }
 
   private async buildHtml(webview: Webview): Promise<string> {

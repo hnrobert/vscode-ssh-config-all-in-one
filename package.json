@@ -177,10 +177,9 @@
             "required": [
               "hostName",
               "direction",
-              "localAddress",
-              "localPort",
-              "remoteAddress",
-              "remotePort"
+              "listenPort",
+              "destHost",
+              "destPort"
             ],
             "properties": {
               "hostName": {
@@ -198,23 +197,21 @@
                   "Remote → Local (ssh -R): listen on the remote machine"
                 ]
               },
-              "localAddress": {
-                "type": "string",
-                "description": "For local: bind address on this machine. For remote: destination host on this machine."
-              },
-              "localPort": {
+              "listenPort": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 65535
+                "maximum": 65535,
+                "description": "Port the tunnel listens on (ssh binds loopback)."
               },
-              "remoteAddress": {
+              "destHost": {
                 "type": "string",
-                "description": "For local: destination host resolved on the remote machine. For remote: bind address on the remote machine."
+                "description": "Destination host of the forwarded traffic, resolved on the other machine."
               },
-              "remotePort": {
+              "destPort": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 65535
+                "maximum": 65535,
+                "description": "Destination port of the forwarded traffic."
               }
             }
           },
