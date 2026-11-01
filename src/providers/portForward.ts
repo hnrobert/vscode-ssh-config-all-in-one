@@ -35,6 +35,7 @@ interface Entry {
   status: ForwardStatus
   message: string | undefined
   graceTimer: ReturnType<typeof setTimeout> | undefined
+  startedAt: number
 }
 
 interface TunnelRecord {
@@ -51,6 +52,8 @@ interface TunnelRecord {
 const CONFIG_KEY = 'portForwards'
 const MAX_ATTEMPTS = 3
 const VERIFY_DELAY_MS = 2500
+const VERIFY_RETRY_MS = 3500
+const START_TIMEOUT_MS = 8000
 const SYNC_INTERVAL_MS = 5000
 
 export function forwardId(rule: PortForwardRule): string {
@@ -211,13 +214,13 @@ export class PortForwardManager implements Disposable {
     }
     catch (err) {
       const message = `Failed to resolve SSH arguments: ${errorMessage(err)}`
-      this.entries.set(id, { status: 'error', message, graceTimer: undefined })
+      this.entries.set(id, { status: 'error', message, graceTimer: undefined, startedAt: Date.now() })
       this.log(`error ${id}: ${message}`)
       this._onDidChange.fire()
       return
     }
 
-    const entry: Entry = { status: 'starting', message: undefined, graceTimer: undefined }
+    const entry: Entry = { status: 'starting', message: undefined, graceTimer: undefined, startedAt: Date.now() }
     this.entries.set(id, entry)
     try {
       // The launcher daemonizes ssh (double detach) so the tunnel escapes
@@ -252,12 +255,16 @@ export class PortForwardManager implements Disposable {
     }
 
     this.log(`start ${id}: ssh ${args.join(' ')}`)
-    entry.graceTimer = setTimeout(() => {
+
+    // Verify the forward after start: check stderr for complaints about OUR
+    // forward (ssh runs without ExitOnForwardFailure, see buildArgs) and
+    // confirm a live tunnel record exists. A second, final check keeps a
+    // slow launcher from being declared dead too early; a legitimate retry
+    // (launcher alive) is never failed here.
+    const check = (final: boolean) => {
       entry.graceTimer = undefined
       if (this.entries.get(id) !== entry)
         return
-      // ssh deliberately runs without ExitOnForwardFailure (see buildArgs),
-      // so check stderr for complaints about OUR forward and fail loudly.
       const detail = this.forwardFailureDetail(rule, this.readTail(id))
       if (detail) {
         this.log(`error ${id}: ${detail}`)
@@ -272,8 +279,23 @@ export class PortForwardManager implements Disposable {
         entry.status = 'running'
         entry.message = undefined
         this._onDidChange.fire()
+        return
       }
-    }, VERIFY_DELAY_MS)
+      if (!final) {
+        entry.graceTimer = setTimeout(check, VERIFY_RETRY_MS, true)
+        return
+      }
+      const retrying = record && pidAlive(record.launcherPid ?? -1)
+      if (!retrying) {
+        const message = 'tunnel did not start (no live tunnel record)'
+        this.log(`error ${id}: ${message}`)
+        this.killRecorded(id)
+        this.entries.delete(id)
+        this._onDidChange.fire()
+        this.notifyFailure(id, message)
+      }
+    }
+    entry.graceTimer = setTimeout(check, VERIFY_DELAY_MS, false)
     this._onDidChange.fire()
   }
 
@@ -535,6 +557,7 @@ export class PortForwardManager implements Disposable {
             status: 'error',
             message,
             graceTimer: undefined,
+            startedAt: Date.now(),
           })
           this.log(`error ${id}: ${message}`)
           changed = true
@@ -543,13 +566,16 @@ export class PortForwardManager implements Disposable {
         continue
       }
 
-      // Between launcher retries — ssh may be down for a few seconds.
-      if ((record.attempts ?? 0) > 0) {
-        if (pidAlive(record.pid) || pidAlive(record.launcherPid ?? -1)) {
+      // Between launcher retries: ssh is down, the launcher is about to
+      // respawn it. A LIVE ssh pid always wins over the retry flag — a
+      // respawned tunnel is up regardless of when the launcher resets the
+      // attempts marker.
+      if ((record.attempts ?? 0) > 0 && !pidAlive(record.pid)) {
+        if (pidAlive(record.launcherPid ?? -1)) {
           const message = `ssh exited; retrying (${record.attempts}/${MAX_ATTEMPTS})`
           const entry = this.entries.get(id)
           if (!entry || entry.status !== 'starting' || entry.message !== message) {
-            this.entries.set(id, { status: 'starting', message, graceTimer: undefined })
+            this.entries.set(id, { status: 'starting', message, graceTimer: undefined, startedAt: Date.now() })
             this.log(`retry ${id}: ${message}`)
             changed = true
           }
@@ -574,13 +600,25 @@ export class PortForwardManager implements Disposable {
       const entry = this.entries.get(id)
       if (!entry) {
         // Started by another window or by the session before a reload.
-        this.entries.set(id, { status: 'running', message: undefined, graceTimer: undefined })
+        this.entries.set(id, { status: 'running', message: undefined, graceTimer: undefined, startedAt: Date.now() })
         this.log(`adopt ${id} (pid ${record.pid})`)
         changed = true
       }
       else if (entry.status === 'starting') {
         entry.status = 'running'
         entry.message = undefined
+        changed = true
+      }
+    }
+
+    // A 'starting' entry whose record never appeared means the launcher or
+    // ssh died before writing anything (spawn failure, storage error) —
+    // fail loudly instead of sitting in 'starting' forever.
+    for (const [id, entry] of [...this.entries]) {
+      if (entry.status === 'starting' && !this.readRecord(id) && Date.now() - entry.startedAt > START_TIMEOUT_MS) {
+        this.entries.delete(id)
+        this.log(`error ${id}: tunnel did not start`)
+        this.notifyFailure(id, 'tunnel did not start')
         changed = true
       }
     }
