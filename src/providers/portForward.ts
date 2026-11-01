@@ -429,7 +429,9 @@ export class PortForwardManager implements Disposable {
     const localPattern = new RegExp(
       `cannot listen to port: ${rule.listenPort}\\b|bind \\[[^\\]]+\\]:${rule.listenPort}: Address already in use`,
     )
-    const remotePattern = new RegExp(`forwarding failed for listen port ${rule.listenPort}\\b`)
+    const remotePattern = new RegExp(
+      `forwarding failed for listen port ${rule.listenPort}\\b|remote forward failure for: listen ${rule.listenPort}\\b`,
+    )
     const idx = lines.findIndex(l => localPattern.test(l) || remotePattern.test(l))
     if (idx === -1)
       return undefined
@@ -504,7 +506,7 @@ export class PortForwardManager implements Disposable {
 
   private readTail(id: string): string {
     try {
-      return readFileSync(this.logPath(id), 'utf8').trim().slice(-400)
+      return readFileSync(this.logPath(id), 'utf8').trim().slice(-800)
     }
     catch {
       return ''
@@ -545,6 +547,11 @@ export class PortForwardManager implements Disposable {
   private async buildArgs(rule: PortForwardRule): Promise<string[]> {
     const args = [
       '-N',
+      // DEBUG1 verbosity: without it ssh stays SILENT when a remote forward
+      // fails to bind (no ExitOnForwardFailure), which would leave a broken
+      // tunnel looking healthy. The forward success/failure lines in the
+      // tunnel log are what the start/adopt verification matches against.
+      '-v',
       '-o',
       'ConnectTimeout=10',
       '-o',
