@@ -511,11 +511,19 @@ export class PortForwardManager implements Disposable {
     }
   }
 
-  /** Kills the recorded process for `id` (possibly owned by another window) and drops the record. */
+  /** Kills the recorded processes for `id` (possibly owned by another window) and drops the record. */
   private killRecorded(id: string): void {
     const record = this.readRecord(id)
     if (!record)
       return
+    // Kill the launcher first so a pending retry cannot respawn the tunnel
+    // after we kill the current ssh (which would leave an untracked orphan).
+    if (record.launcherPid && pidAlive(record.launcherPid)) {
+      try {
+        process.kill(record.launcherPid)
+      }
+      catch { /* already gone */ }
+    }
     if (record.pid > 0 && !record.dead) {
       try {
         process.kill(record.pid)
@@ -656,6 +664,19 @@ export class PortForwardManager implements Disposable {
       const entry = this.entries.get(id)
       if (!entry) {
         // Started by another window or by the session before a reload.
+        // ssh stays alive when its forward fails (no ExitOnForwardFailure),
+        // so verify the forward actually established — otherwise a reloaded
+        // window would adopt a broken tunnel as healthy.
+        const rule = this.findRule(id)
+        const failure = rule ? this.forwardFailureDetail(rule, this.readTail(id)) : undefined
+        if (failure) {
+          this.log(`error ${id}: ${failure}`)
+          this.killRecorded(id)
+          this.entries.set(id, { status: 'error', message: failure, graceTimer: undefined, startedAt: Date.now() })
+          changed = true
+          this.notifyFailure(id, failure)
+          continue
+        }
         this.entries.set(id, { status: 'running', message: undefined, graceTimer: undefined, startedAt: Date.now() })
         this.log(`adopt ${id} (pid ${record.pid})`)
         changed = true
