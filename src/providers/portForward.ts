@@ -2,7 +2,7 @@ import type { Disposable, Event, OutputChannel, QuickPickItem, Uri } from 'vscod
 import type { SSHExplorerProvider } from './explorer'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { commands, EventEmitter, window, workspace } from 'vscode'
@@ -36,6 +36,10 @@ interface Entry {
   message: string | undefined
   graceTimer: ReturnType<typeof setTimeout> | undefined
   startedAt: number
+  /** Pid of the launcher this window spawned (until the record appears). */
+  launcherPid?: number
+  /** How the spawned launcher ended, for precise failure reporting. */
+  launcherExit?: string
 }
 
 interface TunnelRecord {
@@ -54,6 +58,8 @@ const MAX_ATTEMPTS = 3
 const VERIFY_DELAY_MS = 2500
 const VERIFY_RETRY_MS = 3500
 const START_TIMEOUT_MS = 8000
+/** A slow launcher (cold helper spawn) is tolerated up to this bound. */
+const LAUNCHER_TIMEOUT_MS = 15000
 const SYNC_INTERVAL_MS = 5000
 
 export function forwardId(rule: PortForwardRule): string {
@@ -225,7 +231,13 @@ export class PortForwardManager implements Disposable {
     try {
       // The launcher daemonizes ssh (double detach) so the tunnel escapes
       // the extension host's process tree — VS Code kills that tree on
-      // Reload Window — and owns retries + the on-disk record.
+      // Reload Window — and owns retries + the on-disk record. Its stderr
+      // is captured into the tunnel log so a launcher crash is diagnosable.
+      let launcherStderr: number | 'ignore' = 'ignore'
+      try {
+        launcherStderr = openSync(this.logPath(id), 'a')
+      }
+      catch { /* log unavailable */ }
       const launcher = spawn(
         process.execPath,
         [
@@ -238,12 +250,23 @@ export class PortForwardManager implements Disposable {
         ],
         {
           detached: true,
-          stdio: 'ignore',
+          stdio: ['ignore', 'ignore', launcherStderr],
           env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
           windowsHide: true,
         },
       )
+      if (typeof launcherStderr === 'number')
+        closeSync(launcherStderr)
       launcher.unref()
+      if (launcher.pid)
+        entry.launcherPid = launcher.pid
+      launcher.on('error', (err) => {
+        entry.launcherExit = `spawn error: ${err.message}`
+      })
+      launcher.on('exit', (code, signal) => {
+        if (!entry.launcherExit)
+          entry.launcherExit = `exited code=${code ?? 'none'}${signal ? ` signal=${signal}` : ''}`
+      })
     }
     catch (err) {
       entry.status = 'error'
@@ -285,9 +308,12 @@ export class PortForwardManager implements Disposable {
         entry.graceTimer = setTimeout(check, VERIFY_RETRY_MS, true)
         return
       }
-      const retrying = record && pidAlive(record.launcherPid ?? -1)
-      if (!retrying) {
-        const message = 'tunnel did not start (no live tunnel record)'
+      // A live launcher means the tunnel is still being set up (cold helper
+      // spawn) or retried — never declare it dead from this check alone.
+      const launcherAlive = (entry.launcherPid != null && pidAlive(entry.launcherPid))
+        || (record != null && pidAlive(record.launcherPid ?? -1))
+      if (!launcherAlive) {
+        const message = this.tunnelFailureDetail(id, entry, record)
         this.log(`error ${id}: ${message}`)
         this.killRecorded(id)
         this.entries.delete(id)
@@ -413,16 +439,46 @@ export class PortForwardManager implements Disposable {
     return bind + lines[idx].trim()
   }
 
+  /**
+   * Builds a complete, single-line reason for a failed start: record state,
+   * launcher liveness and the first meaningful ssh stderr line.
+   */
+  /** The most informative log line: an ssh error if present, else the launcher's last note. */
+  private diagnosticLine(id: string): string {
+    const lines = this.readTail(id).split('\n').map(l => l.trim()).filter(l => l.length > 0)
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].startsWith('[launcher'))
+        return lines[i]
+    }
+    return lines[lines.length - 1] ?? ''
+  }
+
+  private tunnelFailureDetail(id: string, entry: Entry, record: TunnelRecord | undefined): string {
+    const diag = this.diagnosticLine(id)
+    const suffix = diag ? `: ${diag}` : ' with no output'
+    if (!record) {
+      const launcherAlive = entry.launcherPid != null && pidAlive(entry.launcherPid)
+      if (launcherAlive)
+        return `launcher is running but the tunnel never came up${diag ? ` (last: ${diag})` : ''}`
+      const exit = entry.launcherExit ? ` (${entry.launcherExit})` : ''
+      return `tunnel did not start — the launcher exited early${exit}${suffix}`
+    }
+    if (record.dead)
+      return `gave up after ${MAX_ATTEMPTS} attempts${suffix}`
+    const launcherState = pidAlive(record.launcherPid ?? -1) ? 'launcher alive' : 'launcher exited'
+    return `ssh exited before the tunnel came up (${launcherState}, record pid ${record.pid})${suffix}`
+  }
+
   /** Surfaces a tunnel failure as a bottom-right notification. */
   private notifyFailure(id: string, detail: string): void {
     const rule = this.findRule(id)
     const where = rule ? ` on ${rule.hostName}` : ''
-    window.showErrorMessage(`SSH tunnel${where} failed: ${detail}`)
-  }
-
-  private firstMeaningfulLine(tail: string): string {
-    const line = tail.split('\n').find(l => l.trim().length > 0 && !/^Warning: /i.test(l))
-    return line?.trim() ?? ''
+    void window
+      .showErrorMessage(`SSH tunnel${where} failed: ${detail}`, 'Show Output')
+      .then((choice) => {
+        if (choice === 'Show Output')
+          this.channel.show()
+      })
   }
 
   private safeName(id: string): string {
@@ -552,7 +608,7 @@ export class PortForwardManager implements Disposable {
       if (record.dead) {
         const entry = this.entries.get(id)
         if (!entry || entry.status !== 'error') {
-          const message = this.firstMeaningfulLine(this.readTail(id)) || 'ssh exited after repeated failures'
+          const message = this.diagnosticLine(id) || 'ssh exited after repeated failures'
           this.entries.set(id, {
             status: 'error',
             message,
@@ -613,12 +669,18 @@ export class PortForwardManager implements Disposable {
 
     // A 'starting' entry whose record never appeared means the launcher or
     // ssh died before writing anything (spawn failure, storage error) —
-    // fail loudly instead of sitting in 'starting' forever.
+    // fail loudly instead of sitting in 'starting' forever. A slow-but-live
+    // launcher is tolerated up to LAUNCHER_TIMEOUT_MS.
     for (const [id, entry] of [...this.entries]) {
-      if (entry.status === 'starting' && !this.readRecord(id) && Date.now() - entry.startedAt > START_TIMEOUT_MS) {
+      if (entry.status !== 'starting' || this.readRecord(id))
+        continue
+      const age = Date.now() - entry.startedAt
+      const launcherAlive = entry.launcherPid != null && pidAlive(entry.launcherPid)
+      if (age > START_TIMEOUT_MS && (!launcherAlive || age > LAUNCHER_TIMEOUT_MS)) {
+        const message = this.tunnelFailureDetail(id, entry, undefined)
         this.entries.delete(id)
-        this.log(`error ${id}: tunnel did not start`)
-        this.notifyFailure(id, 'tunnel did not start')
+        this.log(`error ${id}: ${message}`)
+        this.notifyFailure(id, message)
         changed = true
       }
     }

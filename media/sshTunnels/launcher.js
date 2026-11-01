@@ -40,6 +40,15 @@ function recordExists() {
   }
 }
 
+// Lifecycle notes share the tunnel's log file (prefixed) so any failure —
+// including the launcher dying before ssh starts — leaves a trace.
+function note(message) {
+  try {
+    fs.appendFileSync(logPath, `[launcher ${new Date().toISOString()}] ${message}\n`)
+  }
+  catch {}
+}
+
 function writeRecord(fields) {
   try {
     fs.writeFileSync(recordPath, JSON.stringify(Object.assign({ id, startedAt: Date.now(), launcherPid: process.pid }, fields)))
@@ -57,7 +66,7 @@ function removeRecord() {
 function run(attempt) {
   let fd = 'ignore'
   try {
-    fd = fs.openSync(logPath, attempt === 0 ? 'w' : 'a')
+    fd = fs.openSync(logPath, 'a')
   }
   catch {}
 
@@ -74,6 +83,7 @@ function run(attempt) {
   child.unref()
 
   if (child.pid) {
+    note(`attempt ${attempt}: ssh pid ${child.pid}, args: ssh ${sshArgs.join(' ')}`)
     writeRecord({ pid: child.pid, attempts: attempt })
     if (attempt > 0) {
       const pid = child.pid
@@ -92,19 +102,24 @@ function run(attempt) {
     }
   }
   else {
+    note('spawn failed: ssh returned no pid')
     writeRecord({ pid: 0, dead: true })
   }
 
-  child.on('exit', (code) => {
+  child.on('exit', (code, signal) => {
+    note(`ssh exited code=${code} signal=${signal}`)
     // Stopped from a panel (record removed) or a clean exit — stay stopped.
     if (!recordExists() || code === 0) {
+      note('record removed or clean exit — staying stopped')
       removeRecord()
       process.exit(0)
     }
     if (attempt + 1 > MAX_ATTEMPTS) {
+      note(`giving up after ${MAX_ATTEMPTS} attempts`)
       writeRecord({ pid: 0, dead: true })
       process.exit(0)
     }
+    note(`retrying in ${RETRY_DELAY_MS}ms (attempt ${attempt + 1})`)
     setTimeout(() => {
       if (recordExists())
         run(attempt + 1)
@@ -114,4 +129,11 @@ function run(attempt) {
   })
 }
 
+// Truncate the previous run's leftovers, then leave the startup trace —
+// if the launcher dies before ssh starts, this line is the only evidence.
+try {
+  fs.closeSync(fs.openSync(logPath, 'w'))
+}
+catch {}
+note(`launcher pid ${process.pid} starting: ssh ${sshArgs.join(' ')}`)
 run(0)
