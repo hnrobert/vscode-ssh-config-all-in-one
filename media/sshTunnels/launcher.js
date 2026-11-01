@@ -26,6 +26,8 @@ const RETRY_DELAY_MS = 4000
 // Once a tunnel stays up this long, clear the retry flag in its record so
 // panels show plain "Running" instead of "retrying".
 const STABLE_MS = 10000
+// Printed by ssh's LocalCommand once the connection and forward are up.
+const READY_MARKER = 'ssh-tunnels:ready'
 
 if (!tunnelsDir || !safe || !id || !logPath || sshArgs.length === 0)
   process.exit(1)
@@ -63,6 +65,22 @@ function removeRecord() {
   catch {}
 }
 
+// Stamps the record once ssh reports (via LocalCommand on stdout) that the
+// connection and the forward are established — the definitive ready signal.
+function markReady() {
+  try {
+    if (!recordExists())
+      return
+    const rec = JSON.parse(fs.readFileSync(recordPath, 'utf8'))
+    if (!rec.ready) {
+      rec.ready = true
+      fs.writeFileSync(recordPath, JSON.stringify(rec))
+    }
+    note('tunnel ready (connection and forward established)')
+  }
+  catch {}
+}
+
 function run(attempt) {
   let fd = 'ignore'
   try {
@@ -71,7 +89,8 @@ function run(attempt) {
   catch {}
 
   const child = spawn('ssh', sshArgs, {
-    stdio: ['ignore', 'ignore', fd],
+    // stdout carries the LocalCommand ready marker; stderr goes to the log.
+    stdio: ['ignore', 'pipe', fd],
     detached: true,
   })
   if (typeof fd === 'number') {
@@ -81,6 +100,11 @@ function run(attempt) {
     catch {}
   }
   child.unref()
+
+  child.stdout.on('data', (chunk) => {
+    if (String(chunk).indexOf(READY_MARKER) !== -1)
+      markReady()
+  })
 
   if (child.pid) {
     note(`attempt ${attempt}: ssh pid ${child.pid}, args: ssh ${sshArgs.join(' ')}`)

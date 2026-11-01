@@ -3,6 +3,7 @@ import type { SSHExplorerProvider } from './explorer'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { Socket } from 'node:net'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { commands, EventEmitter, window, workspace } from 'vscode'
@@ -51,7 +52,12 @@ interface TunnelRecord {
   attempts?: number
   /** Set by the launcher after the tunnel gave up retrying. */
   dead?: boolean
+  /** Set once ssh reports the connection and forward established. */
+  ready?: boolean
 }
+
+/** Printed by ssh's LocalCommand once the tunnel is truly up. */
+const READY_MARKER = 'ssh-tunnels:ready'
 
 const CONFIG_KEY = 'portForwards'
 const MAX_ATTEMPTS = 3
@@ -299,6 +305,13 @@ export class PortForwardManager implements Disposable {
       }
       const record = this.readRecord(id)
       if (record && pidAlive(record.pid)) {
+        if (!record.ready && !final) {
+          // Still connecting — hold 'starting' until the ready marker lands.
+          entry.graceTimer = setTimeout(check, VERIFY_RETRY_MS, true)
+          return
+        }
+        if (rule.direction === 'local')
+          void this.probeDestination(id, entry)
         entry.status = 'running'
         entry.message = undefined
         this._onDidChange.fire()
@@ -455,6 +468,42 @@ export class PortForwardManager implements Disposable {
     return lines[lines.length - 1] ?? ''
   }
 
+  /**
+   * Connects once through a fresh -L tunnel: when the destination service is
+   * down, ssh logs "channel N: open failed: connect failed" — surface that
+   * instead of showing a healthy light for a dead endpoint. The tunnel is
+   * kept (the destination may come back), only the status turns to error.
+   */
+  private async probeDestination(id: string, entry: Entry): Promise<void> {
+    const listenPort = this.findRule(id)?.listenPort
+    if (!listenPort)
+      return
+    await new Promise<void>((resolve) => {
+      const socket = new Socket()
+      const done = () => {
+        socket.destroy()
+        resolve()
+      }
+      socket.setTimeout(1500)
+      socket.once('connect', done)
+      socket.once('error', done)
+      socket.once('timeout', done)
+      socket.connect(listenPort, '127.0.0.1')
+    })
+    setTimeout(() => {
+      if (this.entries.get(id) !== entry || entry.status !== 'running')
+        return
+      const line = this.readTail(id).split('\n').reverse().find(l => /open failed: connect failed/i.test(l))
+      if (!line)
+        return
+      entry.status = 'error'
+      entry.message = line.trim()
+      this.log(`error ${id}: destination unreachable — ${line.trim()}`)
+      this._onDidChange.fire()
+      this.notifyFailure(id, `destination unreachable (${line.trim()})`)
+    }, 400)
+  }
+
   private tunnelFailureDetail(id: string, entry: Entry, record: TunnelRecord | undefined): string {
     const diag = this.diagnosticLine(id)
     const suffix = diag ? `: ${diag}` : ' with no output'
@@ -558,6 +607,19 @@ export class PortForwardManager implements Disposable {
       'ServerAliveInterval=15',
       '-o',
       'ServerAliveCountMax=4',
+      // Never multiplex over (or become) the user's shared ControlMaster
+      // connection — another session closing it would take the tunnel down.
+      '-o',
+      'ControlMaster=no',
+      '-o',
+      'ControlPath=none',
+      // Once ssh has connected AND set up the forward it runs LocalCommand;
+      // the marker it prints on stdout is the definitive ready signal the
+      // launcher stamps into the tunnel record.
+      '-o',
+      'PermitLocalCommand=yes',
+      '-o',
+      `LocalCommand=echo ${READY_MARKER}`,
     ]
 
     const configFile = await this.resolveConfigFile(rule.hostName)
