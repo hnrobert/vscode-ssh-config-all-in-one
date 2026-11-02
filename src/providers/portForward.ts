@@ -750,10 +750,27 @@ export class PortForwardManager implements Disposable {
         this.log(`adopt ${id} (pid ${record.pid})`)
         changed = true
       }
-      else if (entry.status === 'starting') {
-        entry.status = 'running'
-        entry.message = undefined
-        changed = true
+      else if (entry.status === 'starting' || entry.status === 'running') {
+        // Keep verifying: a tunnel adopted in the window before its forward
+        // failure landed in the log (ssh's LocalCommand fires early) would
+        // otherwise stay green forever.
+        const rule = this.findRule(id)
+        const failure = rule ? this.forwardFailureDetail(rule, this.readTail(id)) : undefined
+        if (failure) {
+          const didKill = this.readRecord(id) != null
+          this.log(`error ${id}: ${failure}`)
+          this.killRecorded(id)
+          entry.status = 'error'
+          entry.message = failure
+          changed = true
+          if (didKill)
+            this.notifyFailure(id, failure)
+        }
+        else if (entry.status === 'starting') {
+          entry.status = 'running'
+          entry.message = undefined
+          changed = true
+        }
       }
     }
 
