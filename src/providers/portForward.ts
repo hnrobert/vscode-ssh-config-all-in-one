@@ -842,6 +842,21 @@ interface DirectionPickItem extends QuickPickItem {
   value: ForwardDirection
 }
 
+interface PresetPickItem extends QuickPickItem {
+  port?: number
+}
+
+/** Common services offered as quick fill in the add-forward wizard. */
+const QUICK_FILL_PRESETS: readonly { label: string, description: string, port: number }[] = [
+  { label: 'Web (HTTP)', description: 'remote web server', port: 80 },
+  { label: 'HTTPS', description: 'remote secure web server', port: 443 },
+  { label: 'MySQL', description: 'remote MySQL database', port: 3306 },
+  { label: 'PostgreSQL', description: 'remote PostgreSQL database', port: 5432 },
+  { label: 'Redis', description: 'remote Redis', port: 6379 },
+  { label: 'SSH', description: 'remote sshd', port: 22 },
+  { label: 'Windows RDP', description: 'remote Windows desktop', port: 3389 },
+]
+
 /**
  * Multi-step quick input that creates (and starts) a port forward rule.
  * `presetHostName` comes from the explorer context menu, `presetPort` from
@@ -888,6 +903,20 @@ export async function promptAndAddPortForward(
   if (!direction)
     return
 
+  const presetPick = await window.showQuickPick<PresetPickItem>(
+    [
+      { label: 'Custom…', description: 'enter the ports manually' },
+      ...QUICK_FILL_PRESETS.map(p => ({
+        label: p.label,
+        description: `${p.description} — pre-fills port ${p.port}`,
+        port: p.port,
+      })),
+    ],
+    { title, placeHolder: 'Quick fill — pick a common service, or Custom…', ignoreFocusOut: true },
+  )
+  if (!presetPick)
+    return
+
   const localPrompt = direction.value === 'local'
     ? 'Port to listen on, on this machine'
     : 'Destination port on this machine'
@@ -895,7 +924,7 @@ export async function promptAndAddPortForward(
     title,
     prompt: localPrompt,
     placeHolder: '8080',
-    value: presetPort ? String(presetPort) : '',
+    value: presetPick.port ? String(presetPick.port) : (presetPort ? String(presetPort) : ''),
     ignoreFocusOut: true,
     validateInput: validatePort,
   })
