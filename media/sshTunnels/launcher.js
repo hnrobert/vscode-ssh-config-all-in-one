@@ -10,9 +10,9 @@
 //
 // Usage: node launcher.js <tunnelsDir> <safeName> <id> <logPath> <sshArgs...>
 
-const { spawn } = require('child_process')
-const fs = require('fs')
-const path = require('path')
+const { spawn } = require('node:child_process')
+const fs = require('node:fs')
+const path = require('node:path')
 
 const tunnelsDir = process.argv[2]
 const safe = process.argv[3]
@@ -102,7 +102,7 @@ function run(attempt) {
   child.unref()
 
   child.stdout.on('data', (chunk) => {
-    if (String(chunk).indexOf(READY_MARKER) !== -1)
+    if (String(chunk).includes(READY_MARKER))
       markReady()
   })
 

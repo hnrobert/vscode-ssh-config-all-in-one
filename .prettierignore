@@ -1,0 +1,7 @@
+# Hand-maintained runtime assets — their style is governed by the project's
+# ESLint-free conventions, and Prettier's defaults (semicolons, wrapping)
+# would fight the editor's ESLint auto-fix every save.
+media/
+
+# Build output
+out/

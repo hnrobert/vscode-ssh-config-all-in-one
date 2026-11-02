@@ -8,8 +8,8 @@
 //
 // Usage: node watchdog.js <tunnelsDir> <vscodeMainPid>
 
-const fs = require('fs')
-const path = require('path')
+const fs = require('node:fs')
+const path = require('node:path')
 
 const tunnelsDir = process.argv[2]
 const mainPid = Number(process.argv[3])
