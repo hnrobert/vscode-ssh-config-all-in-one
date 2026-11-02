@@ -24,9 +24,10 @@
 - **Quick Connect CodeLens**: Provides "Connect in Current Window..." and "Connect in New Window..." inline buttons above each `Host` declaration. Seamlessly connects to the server using the official `ms-vscode-remote.remote-ssh` extension.
   - ![quick-connect-code-lens-demo](docs/images/quick-connect-code-lens-demo.png)
 - **SSH Port Forwarding (SSH Tunnels panel)**: A bottom-panel view alongside the built-in *Ports*, styled after it. Each row is a persistent `ssh -N -L/-R` tunnel kept alive with automatic retries — the same effect as the forwards VS Code sets up once you SSH into a machine, but without opening a remote window:
+  - ![ssh-tunnels-demo](docs/images/ssh-tunnels.png)
   - Right-click a host in the explorer → **Forward Port...** to pick the direction — **Listen Local (ssh -L)** to bring a remote service to this machine, or **Listen Remote (ssh -R)** to expose a local service on the remote machine — plus quick-fill presets for common services (MySQL, Web, PostgreSQL, Redis, SSH, RDP); the tunnel starts immediately
   - Columns for direction, host, and the two sides of the tunnel — **Listen** (the port to listen on; ssh binds loopback) and **Destination** (full `host:port`, resolved on the other machine) — all editable in place, and a running tunnel restarts automatically with the new arguments
-  - Per-row start/stop and open-in-browser, remove, plus a header input that forwards a port in one keystroke
+  - Per-row start/stop, open-in-browser, and remove; the header offers a host filter (auto-follows the window's current SSH remote), direction/status filter buttons, and a free-text search over host, address, and port
   - Tunnels follow the VS Code application, not a window: they keep running across `Reload Window` and window closes, all windows see and control the same set of tunnels, and they are cleaned up when VS Code quits
 - **SSH Config Auto-Detection**: Files whose name contains "config" are automatically detected as SSH Config when their content matches SSH Config patterns (e.g. `Host`, `HostName`, `IdentityFile` directives). Can be disabled via `sshConfigAllInOne.detection.enabled`.
 - **Fuzzy Host Search**: The search command supports relevance-ranked matching with extended syntax:
