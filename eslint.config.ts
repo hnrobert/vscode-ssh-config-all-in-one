@@ -16,6 +16,9 @@ export default antfu(
       '!.vscode',
       '!**/.vscode',
       'src/test/**',
+      // Plain runtime assets (webview scripts, launcher, watchdog) — kept out
+      // of the TS toolchain on purpose; verified by node --check instead.
+      'media/**',
     ],
     overrides: {
       stylistic: {
