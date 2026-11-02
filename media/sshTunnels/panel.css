@@ -92,6 +92,14 @@ th.sortable:hover { color: var(--vscode-foreground); }
 .icon-btn svg { width: 16px; height: 16px; }
 #tableWrap { flex: 1; overflow: auto; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+/* Column widths live in this CSS file, not inline style attributes — the
+ * webview CSP (style-src without 'unsafe-inline') silently drops those. */
+.col-direction { width: 160px; }
+.col-host { width: auto; }
+.col-listen { width: 90px; }
+.col-destination { width: 190px; }
+.col-status { width: 130px; }
+.col-actions { width: 92px; }
 th {
   position: sticky;
   top: 0;
@@ -122,7 +130,7 @@ tbody tr:hover td { background: var(--vscode-list-hoverBackground); }
   cursor: pointer;
   height: 22px;
   line-height: 22px;
-  padding: 0 4px;
+  padding: 0 6px;
   margin-left: -4px;
   border-radius: 4px;
   max-width: 100%;
