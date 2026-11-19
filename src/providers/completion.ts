@@ -3,6 +3,7 @@ import type {
   CompletionItemProvider,
   Disposable,
   Position,
+  SignatureHelpProvider,
   TextDocument,
 } from 'vscode'
 import { existsSync, readdirSync, statSync } from 'node:fs'
@@ -13,6 +14,9 @@ import {
   CompletionItemKind,
   languages,
   MarkdownString,
+  ParameterInformation,
+  SignatureHelp,
+  SignatureInformation,
   SnippetString,
 } from 'vscode'
 import { SSH_CONFIG_OPTIONS } from '../models/SSHHost'
@@ -48,6 +52,40 @@ const ENUM_VALUES_LOWER: ReadonlyMap<string, readonly string[]> = new Map(
   Object.entries(ENUM_VALUES).map(([key, values]) => [key.toLowerCase(), values]),
 )
 
+interface DirectiveSignature {
+  label: string
+  documentation: string
+  params: { label: string, documentation: string }[]
+}
+
+// Directives taking several space-separated arguments: shown as parameter
+// hints instead of completions while the arguments are typed.
+const SIGNATURES: ReadonlyMap<string, DirectiveSignature> = new Map(Object.entries({
+  localforward: {
+    label: 'LocalForward [bind_address:]port host:hostport',
+    documentation: 'Listen on a local port and forward connections through the remote host.',
+    params: [
+      { label: '[bind_address:]port', documentation: 'Local port to listen on, optionally prefixed by a bind address (e.g. `8080` or `127.0.0.1:8080`).' },
+      { label: 'host:hostport', documentation: 'Destination as seen from the remote host (e.g. `localhost:80`).' },
+    ],
+  },
+  remoteforward: {
+    label: 'RemoteForward [bind_address:]port [host:hostport]',
+    documentation: 'Listen on a port on the remote host and forward connections back through this machine. Omit the destination for a dynamic (SOCKS) remote forward.',
+    params: [
+      { label: '[bind_address:]port', documentation: 'Remote port to listen on, optionally prefixed by a bind address (needs sshd `GatewayPorts` to bind beyond loopback).' },
+      { label: '[host:hostport]', documentation: 'Destination as seen from this machine (e.g. `localhost:3000`).' },
+    ],
+  },
+  dynamicforward: {
+    label: 'DynamicForward [bind_address:]port',
+    documentation: 'Open a local SOCKS proxy that forwards through the remote host.',
+    params: [
+      { label: '[bind_address:]port', documentation: 'Local port for the SOCKS proxy, optionally prefixed by a bind address.' },
+    ],
+  },
+}))
+
 function isInHostBlock(document: TextDocument, line: number): boolean {
   const currentLine = document.lineAt(line).text
   if (/^\s*(?:Host|Match)\s/i.test(currentLine))
@@ -80,9 +118,33 @@ function resolveIncludeBasePath(partial: string): { dir: string, prefix: string 
   return { dir, prefix }
 }
 
-export class SSHCompletionItemsProvider implements CompletionItemProvider {
+export class SSHCompletionItemsProvider implements CompletionItemProvider, SignatureHelpProvider {
   constructor(disposables: Disposable[]) {
     disposables.push(languages.registerCompletionItemProvider(DOCUMENT_PROVIDER, this, ' ', '/', '~'))
+    disposables.push(languages.registerSignatureHelpProvider(DOCUMENT_PROVIDER, this, ' '))
+  }
+
+  provideSignatureHelp(document: TextDocument, position: Position): SignatureHelp | undefined {
+    const prefix = document.lineAt(position.line).text.slice(0, position.character)
+    const match = /^\s*(\w+)(\s.*)$/.exec(prefix)
+    if (!match)
+      return undefined
+    const sig = SIGNATURES.get(match[1].toLowerCase())
+    if (!sig)
+      return undefined
+
+    const args = match[2].trim().split(/\s+/).filter(Boolean)
+    const active = /\s$/.test(match[2]) ? args.length : args.length - 1
+    if (active >= sig.params.length)
+      return undefined
+
+    const info = new SignatureInformation(sig.label, new MarkdownString(sig.documentation))
+    info.parameters = sig.params.map(p => new ParameterInformation(p.label, new MarkdownString(p.documentation)))
+    const help = new SignatureHelp()
+    help.signatures = [info]
+    help.activeSignature = 0
+    help.activeParameter = Math.max(active, 0)
+    return help
   }
 
   async provideCompletionItems(document: TextDocument, position: Position): Promise<CompletionItem[] | undefined> {
@@ -112,6 +174,11 @@ export class SSHCompletionItemsProvider implements CompletionItemProvider {
       return undefined
     }
 
+    // Past the first argument of a directive (e.g. the second LocalForward
+    // value): no keyword suggestions — parameter hints cover it.
+    if (/^\s*\w+\s+\S/.test(prefix))
+      return undefined
+
     const inBlock = isInHostBlock(document, position.line)
     const items: CompletionItem[] = []
 
@@ -140,6 +207,9 @@ export class SSHCompletionItemsProvider implements CompletionItemProvider {
         item.insertText = this.getInsertText(opt.label)
         if (ENUM_VALUES[opt.label]) {
           item.command = { command: 'editor.action.triggerSuggest', title: 'Trigger value suggestions' }
+        }
+        else if (SIGNATURES.has(opt.label.toLowerCase())) {
+          item.command = { command: 'editor.action.triggerParameterHints', title: 'Trigger parameter hints' }
         }
         item.sortText = opt.label
         items.push(item)
