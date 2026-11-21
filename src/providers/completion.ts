@@ -10,6 +10,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import {
+  commands,
   CompletionItem,
   CompletionItemKind,
   languages,
@@ -202,6 +203,16 @@ export class SSHCompletionItemsProvider implements CompletionItemProvider, Signa
   constructor(disposables: Disposable[]) {
     disposables.push(languages.registerCompletionItemProvider(DOCUMENT_PROVIDER, this, ' ', '/', '~'))
     disposables.push(languages.registerSignatureHelpProvider(DOCUMENT_PROVIDER, this, ' '))
+    // A completion item carries a single command; enum directives want BOTH
+    // the value candidates and the parameter hint visible, so chain the two
+    // built-in triggers behind one internal command.
+    disposables.push(commands.registerCommand(
+      'vscode-ssh-config-all-in-one.triggerValueAndParamHints',
+      async () => {
+        await commands.executeCommand('editor.action.triggerSuggest')
+        await commands.executeCommand('editor.action.triggerParameterHints')
+      },
+    ))
   }
 
   provideSignatureHelp(document: TextDocument, position: Position): SignatureHelp | undefined {
@@ -304,7 +315,7 @@ export class SSHCompletionItemsProvider implements CompletionItemProvider, Signa
         item.documentation = new MarkdownString(opt.documentation)
         item.insertText = this.getInsertText(opt.label)
         if (ENUM_VALUES[opt.label]) {
-          item.command = { command: 'editor.action.triggerSuggest', title: 'Trigger value suggestions' }
+          item.command = { command: 'vscode-ssh-config-all-in-one.triggerValueAndParamHints', title: 'Trigger value suggestions and parameter hints' }
         }
         else {
           // Every non-enum directive has parameter hints (curated or the
